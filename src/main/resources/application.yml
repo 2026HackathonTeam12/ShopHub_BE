@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: ShopHub
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/shophub?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${SPRING_DATASOURCE_USERNAME:shophub}
+    password: ${SPRING_DATASOURCE_PASSWORD:shophub}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+google:
+  places:
+    api-key: ${GOOGLE_PLACES_API_KEY:}
+    base-url: ${GOOGLE_PLACES_BASE_URL:https://maps.googleapis.com}
+    language: ${GOOGLE_PLACES_LANGUAGE:ko}
+
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+  model: ${OPENAI_MODEL:gpt-4o-mini}
+  temperature: ${OPENAI_TEMPERATURE:0.7}
+
+instagram:
+  graph:
+    base-url: ${INSTAGRAM_GRAPH_BASE_URL:https://graph.instagram.com/v21.0}
+    account-id: ${INSTAGRAM_GRAPH_ACCOUNT_ID:}
+    access-token: ${INSTAGRAM_GRAPH_ACCESS_TOKEN:}
+    max-attempts: ${INSTAGRAM_GRAPH_MAX_ATTEMPTS:15}
+    interval-ms: ${INSTAGRAM_GRAPH_INTERVAL_MS:2000}
+
+app:
+  storage:
+    upload-dir: ${APP_STORAGE_UPLOAD_DIR:./uploads}
+    public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}

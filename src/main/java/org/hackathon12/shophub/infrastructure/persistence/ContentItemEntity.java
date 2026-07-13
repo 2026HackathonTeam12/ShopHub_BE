@@ -1,0 +1,95 @@
+package org.hackathon12.shophub.infrastructure.persistence;
+
+import org.hackathon12.shophub.domain.content.model.ContentItem;
+import org.hackathon12.shophub.domain.content.model.ContentStatus;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
+import jakarta.persistence.Table;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+@Entity
+@Table(name = "content_items")
+public class ContentItemEntity {
+
+    @Id
+    @Column(nullable = false, updatable = false)
+    private UUID id;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(
+            name = "store_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_content_items_store")
+    )
+    private StoreProfileEntity store;
+
+    @Column(nullable = false)
+    private String title;
+
+    @Lob
+    @Column(nullable = false)
+    private String body;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(
+            name = "content_channels",
+            joinColumns = @JoinColumn(
+                    name = "content_id",
+                    foreignKey = @ForeignKey(name = "fk_content_channels_content")
+            )
+    )
+    @OrderColumn(name = "display_order")
+    @Column(name = "channel_name", nullable = false)
+    private List<String> channels = new ArrayList<>();
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ContentStatus status;
+
+    @Column(nullable = false)
+    private Instant updatedAt;
+
+    protected ContentItemEntity() {
+    }
+
+    public static ContentItemEntity fromDomain(ContentItem contentItem) {
+        ContentItemEntity entity = new ContentItemEntity();
+        entity.id = contentItem.id();
+        entity.store = StoreProfileEntity.reference(contentItem.storeId());
+        entity.title = contentItem.title();
+        entity.body = contentItem.body();
+        entity.channels = contentItem.channels() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(contentItem.channels());
+        entity.status = contentItem.status();
+        entity.updatedAt = contentItem.updatedAt();
+        return entity;
+    }
+
+    public ContentItem toDomain() {
+        return new ContentItem(
+                id,
+                store.getId(),
+                title,
+                body,
+                List.copyOf(channels),
+                status,
+                updatedAt
+        );
+    }
+}

@@ -1,0 +1,589 @@
+openapi: 3.0.3
+info:
+  title: ShopHub Dashboard API (Site-based)
+  version: 1.0.0
+  description: |
+    API spec derived from the current dashboard UX flow:
+    - Store Management Dashboard
+    - Store Registration
+    - Reviews page (/reviews)
+    - Google Places latest reviews (latest 5)
+    - AI reply drafting for recent reviews
+servers:
+  - url: https://api.shophub.kr
+    description: production
+  - url: http://localhost:8080
+    description: local
+tags:
+  - name: Dashboard
+  - name: Stores
+  - name: Review Sync
+  - name: Reviews
+  - name: AI Reply
+
+paths:
+  /v1/dashboard/stores:
+    get:
+      tags: [Dashboard]
+      summary: Get store cards for dashboard
+      description: Returns the list used by "Store Management Dashboard" cards.
+      parameters:
+        - in: query
+          name: platform
+          schema:
+            $ref: '#/components/schemas/PlatformType'
+          description: Optional platform filter (for review count on cards)
+      responses:
+        '200':
+          description: Store cards loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StoreDashboardCard'
+
+  /v1/stores:
+    post:
+      tags: [Stores]
+      summary: Register a new store
+      description: Used by "Store Registration" flow.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStoreRequest'
+      responses:
+        '201':
+          description: Store created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Store'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags: [Stores]
+      summary: List stores
+      responses:
+        '200':
+          description: Stores loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Store'
+
+  /v1/stores/{storeId}:
+    get:
+      tags: [Stores]
+      summary: Get store detail
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Store loaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Store'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Stores]
+      summary: Update store detail
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStoreRequest'
+      responses:
+        '200':
+          description: Store updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Store'
+
+  /v1/stores/{storeId}/google-business:
+    put:
+      tags: [Stores]
+      summary: Connect Google Business source for reviews
+      description: |
+        Saves the Place ID / Business URL used for Google review sync.
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectGoogleBusinessRequest'
+      responses:
+        '200':
+          description: Google source connected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoogleBusinessConnection'
+
+  /v1/stores/{storeId}/platforms:
+    get:
+      tags: [Stores]
+      summary: List connected platforms for a store
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: Platform list loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlatformConnection'
+
+  /v1/stores/{storeId}/reviews/sync/google:
+    post:
+      tags: [Review Sync]
+      summary: Sync Google reviews for store
+      description: Triggers Google Places sync and stores latest reviews.
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit:
+                  type: integer
+                  default: 5
+                  minimum: 1
+                  maximum: 20
+      responses:
+        '202':
+          description: Sync started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncJobResponse'
+
+  /v1/stores/{storeId}/reviews/summary:
+    get:
+      tags: [Reviews]
+      summary: Get review summary for top section
+      description: Returns values like "Google total 128, synced latest 5".
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - in: query
+          name: platform
+          required: false
+          schema:
+            $ref: '#/components/schemas/PlatformType'
+            default: GOOGLE
+      responses:
+        '200':
+          description: Summary loaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewSummary'
+
+  /v1/stores/{storeId}/reviews:
+    get:
+      tags: [Reviews]
+      summary: Get reviews for reviews page
+      description: Supports the recent-review list shown in /reviews.
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+        - in: query
+          name: platform
+          schema:
+            $ref: '#/components/schemas/PlatformType'
+            default: GOOGLE
+        - in: query
+          name: syncedOnly
+          schema:
+            type: boolean
+            default: true
+        - in: query
+          name: sort
+          schema:
+            type: string
+            enum: [LATEST, RATING_DESC, RATING_ASC]
+            default: LATEST
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 5
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Reviews loaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewListResponse'
+
+  /v1/reviews/{reviewId}:
+    get:
+      tags: [Reviews]
+      summary: Get review detail
+      parameters:
+        - $ref: '#/components/parameters/ReviewId'
+      responses:
+        '200':
+          description: Review loaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/reviews/{reviewId}/ai-reply-drafts:
+    post:
+      tags: [AI Reply]
+      summary: Generate AI reply draft for review
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tone:
+                  type: string
+                  enum: [FRIENDLY, FORMAL, APOLOGETIC, THANKFUL]
+                  default: FRIENDLY
+                maxLength:
+                  type: integer
+                  default: 300
+      parameters:
+        - $ref: '#/components/parameters/ReviewId'
+      responses:
+        '200':
+          description: Draft generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiReplyDraft'
+
+  /v1/reviews/{reviewId}/replies:
+    post:
+      tags: [Reviews]
+      summary: Publish review reply
+      parameters:
+        - $ref: '#/components/parameters/ReviewId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  maxLength: 3000
+      responses:
+        '201':
+          description: Reply published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewReply'
+
+components:
+  parameters:
+    StoreId:
+      in: path
+      name: storeId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReviewId:
+      in: path
+      name: reviewId
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    PlatformType:
+      type: string
+      enum: [GOOGLE, INSTAGRAM, NAVER_PLACE, KAKAO_MAP, FACEBOOK, THREADS]
+
+    ErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    Store:
+      type: object
+      required: [id, name, category, phone, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        tone:
+          type: string
+          description: Brand voice for AI replies
+        hours:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateStoreRequest:
+      type: object
+      required: [name, category, phone]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        category:
+          type: string
+          maxLength: 100
+        phone:
+          type: string
+          maxLength: 30
+        address:
+          type: string
+          maxLength: 500
+        tone:
+          type: string
+          maxLength: 30
+        hours:
+          type: string
+          maxLength: 200
+
+    UpdateStoreRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateStoreRequest'
+
+    StoreDashboardCard:
+      type: object
+      required: [storeId, storeName, reviewCount]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        storeName:
+          type: string
+        reviewCount:
+          type: integer
+        connectedPlatforms:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformType'
+
+    ConnectGoogleBusinessRequest:
+      type: object
+      required: [placeId]
+      properties:
+        placeId:
+          type: string
+        businessProfileUrl:
+          type: string
+          format: uri
+        mapUrl:
+          type: string
+          format: uri
+
+    GoogleBusinessConnection:
+      type: object
+      required: [storeId, placeId, connectedAt]
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        placeId:
+          type: string
+        businessProfileUrl:
+          type: string
+          format: uri
+        mapUrl:
+          type: string
+          format: uri
+        connectedAt:
+          type: string
+          format: date-time
+
+    PlatformConnection:
+      type: object
+      required: [platform, connected]
+      properties:
+        platform:
+          $ref: '#/components/schemas/PlatformType'
+        connected:
+          type: boolean
+        lastSyncedAt:
+          type: string
+          format: date-time
+
+    SyncJobResponse:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [QUEUED, RUNNING]
+
+    ReviewSummary:
+      type: object
+      required: [platform, totalCount, syncedRecentCount]
+      properties:
+        platform:
+          $ref: '#/components/schemas/PlatformType'
+        totalCount:
+          type: integer
+          description: Total review count on source platform
+        syncedRecentCount:
+          type: integer
+          description: Number of reviews currently synced into ShopHub
+        averageRating:
+          type: number
+          format: double
+        externalViewUrl:
+          type: string
+          format: uri
+
+    Review:
+      type: object
+      required: [id, storeId, platform, authorName, rating, content, reviewedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        platform:
+          $ref: '#/components/schemas/PlatformType'
+        externalReviewId:
+          type: string
+        authorName:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        content:
+          type: string
+        reviewedAt:
+          type: string
+          format: date-time
+        replied:
+          type: boolean
+        reply:
+          $ref: '#/components/schemas/ReviewReply'
+
+    ReviewListResponse:
+      type: object
+      required: [items, page, size, totalElements]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Review'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalElements:
+          type: integer
+
+    AiReplyDraft:
+      type: object
+      required: [reviewId, draft]
+      properties:
+        reviewId:
+          type: string
+          format: uuid
+        draft:
+          type: string
+        tone:
+          type: string
+        model:
+          type: string
+
+    ReviewReply:
+      type: object
+      required: [id, content, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
