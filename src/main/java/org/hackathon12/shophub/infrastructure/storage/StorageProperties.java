@@ -6,6 +6,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record StorageProperties(
         String uploadDir,
         String publicBaseUrl,
-        String publicImageProvider
+        String publicImageProvider,
+        S3 s3
 ) {
+
+    public record S3(
+            String bucket,
+            String region,
+            String publicBaseUrl,
+            String keyPrefix
+    ) {
+    }
 }

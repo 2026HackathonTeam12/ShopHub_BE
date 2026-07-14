@@ -19,6 +19,9 @@ repositories {
 }
 
 dependencies {
+    implementation 'com.google.genai:google-genai:1.57.0'
+    implementation platform('software.amazon.awssdk:bom:2.31.54')
+    implementation 'software.amazon.awssdk:s3'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'

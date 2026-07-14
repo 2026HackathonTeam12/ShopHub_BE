@@ -8,10 +8,7 @@ import org.hackathon12.shophub.domain.ai.model.ReviewReplyPrompt;
 import org.hackathon12.shophub.domain.ai.port.AiTextGenerationPort;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
 import org.hackathon12.shophub.infrastructure.ai.template.AiTextTemplateProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,9 +19,6 @@ import tools.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 
-@Component
-@Primary
-@ConditionalOnProperty(prefix = "anthropic", name = "api-key")
 public class AnthropicTextGenerationAdapter implements AiTextGenerationPort {
 
     private static final Logger log = LoggerFactory.getLogger(AnthropicTextGenerationAdapter.class);

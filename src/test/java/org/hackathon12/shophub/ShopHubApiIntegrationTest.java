@@ -42,7 +42,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "instagram.graph.access-token=",
         "instagram.graph.allowed-account-id=",
         "facebook.graph.access-token=",
-        "openai.api-key="
+        "openai.api-key=",
+        "gemini.api-key=",
+        "anthropic.api-key="
 })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -1398,6 +1400,7 @@ class ShopHubApiIntegrationTest {
                 "GET /v1/reviews/inbox",
                 "GET /v1/stores",
                 "GET /v1/stores/{storeId}/contents",
+                "GET /v1/stores/{storeId}/contents/platform-status",
                 "GET /v1/stores/{storeId}/dashboard",
                 "GET /v1/stores/{storeId}/profile",
                 "GET /v1/stores/{storeId}/reviews",
@@ -1412,6 +1415,7 @@ class ShopHubApiIntegrationTest {
                 "POST /v1/reviews/{reviewId}/reply",
                 "POST /v1/stores",
                 "POST /v1/stores/{storeId}/contents",
+                "POST /v1/stores/{storeId}/contents/images",
                 "POST /v1/stores/{storeId}/contents/suggest",
                 "POST /v1/stores/{storeId}/contents/{contentId}/retry",
                 "POST /v1/stores/{storeId}/contents/{type}/publish-carousel",

@@ -47,6 +47,13 @@ openai:
   model: ${OPENAI_MODEL:gpt-4o-mini}
   temperature: ${OPENAI_TEMPERATURE:0.7}
 
+gemini:
+  api-key: ${GEMINI_API_KEY:}
+  base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+  model: ${GEMINI_MODEL:gemini-2.0-flash}
+  temperature: ${GEMINI_TEMPERATURE:0.7}
+  max-output-tokens: ${GEMINI_MAX_OUTPUT_TOKENS:1024}
+
 anthropic:
   api-key: ${ANTHROPIC_API_KEY:}
   base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
@@ -105,3 +112,8 @@ app:
     upload-dir: ${APP_STORAGE_UPLOAD_DIR:./uploads}
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
     public-image-provider: ${APP_STORAGE_PUBLIC_IMAGE_PROVIDER:picsum-dev}
+    s3:
+      bucket: ${AWS_S3_BUCKET:}
+      region: ${AWS_S3_REGION:ap-northeast-2}
+      public-base-url: ${AWS_S3_PUBLIC_BASE_URL:}
+      key-prefix: ${AWS_S3_KEY_PREFIX:shophub}

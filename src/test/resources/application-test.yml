@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: []
   datasource:
     url: jdbc:h2:mem:shophub;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -21,6 +23,8 @@ app:
       store: memory
   review-sync:
     enabled: false
+  storage:
+    public-image-provider: picsum-dev
 
 mock-map:
   oauth:
@@ -31,3 +35,12 @@ x:
   oauth:
     cache:
       store: memory
+
+gemini:
+  api-key:
+
+anthropic:
+  api-key:
+
+openai:
+  api-key:

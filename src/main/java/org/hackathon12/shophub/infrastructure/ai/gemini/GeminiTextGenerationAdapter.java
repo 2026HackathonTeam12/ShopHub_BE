@@ -1,5 +1,10 @@
-package org.hackathon12.shophub.infrastructure.ai.openai;
+package org.hackathon12.shophub.infrastructure.ai.gemini;
 
+import com.google.genai.Client;
+import com.google.genai.types.Content;
+import com.google.genai.types.GenerateContentConfig;
+import com.google.genai.types.GenerateContentResponse;
+import com.google.genai.types.Part;
 import org.hackathon12.shophub.domain.ai.model.AiGeneratedText;
 import org.hackathon12.shophub.domain.ai.model.AiGenerationSource;
 import org.hackathon12.shophub.domain.ai.model.ContentSuggestionPrompt;
@@ -8,28 +13,26 @@ import org.hackathon12.shophub.domain.ai.model.ReviewReplyPrompt;
 import org.hackathon12.shophub.domain.ai.port.AiTextGenerationPort;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
 import org.hackathon12.shophub.infrastructure.ai.template.AiTextTemplateProvider;
-import org.springframework.http.MediaType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-import java.util.List;
-import java.util.Map;
+public class GeminiTextGenerationAdapter implements AiTextGenerationPort {
 
-public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
+    private static final Logger log = LoggerFactory.getLogger(GeminiTextGenerationAdapter.class);
 
-    private final RestClient restClient;
-    private final OpenAiProperties properties;
+    private final Client client;
+    private final GeminiProperties properties;
     private final AiTextTemplateProvider templateProvider;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public OpenAiTextGenerationAdapter(
-            RestClient.Builder restClientBuilder,
-            OpenAiProperties properties,
+    public GeminiTextGenerationAdapter(
+            GeminiProperties properties,
             AiTextTemplateProvider templateProvider
     ) {
-        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this.client = Client.builder().apiKey(properties.apiKey()).build();
         this.properties = properties;
         this.templateProvider = templateProvider;
     }
@@ -37,9 +40,6 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
     @Override
     public ContentSuggestion generateContentSuggestion(ContentSuggestionPrompt prompt) {
         AiTextTemplateProvider.TemplateContent template = templateProvider.contentSuggestion(prompt);
-        if (!StringUtils.hasText(properties.apiKey())) {
-            return toContentSuggestion(template, AiGenerationSource.TEMPLATE);
-        }
 
         String systemPrompt = """
                 당신은 소상공인 콘텐츠 매니저입니다.
@@ -69,20 +69,23 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
                 safe(prompt.eventText())
         );
 
-        String rawResponse = callOpenAi(systemPrompt, userPrompt);
+        String rawResponse = callGemini(systemPrompt, userPrompt, true);
         if (!StringUtils.hasText(rawResponse)) {
+            log.warn("Gemini content suggestion fallback to template: empty response");
             return toContentSuggestion(template, AiGenerationSource.TEMPLATE);
         }
 
         try {
-            JsonNode root = objectMapper.readTree(rawResponse);
+            JsonNode root = objectMapper.readTree(extractJsonPayload(rawResponse));
             String title = root.path("title").asText();
             String body = root.path("body").asText();
             if (!StringUtils.hasText(title) || !StringUtils.hasText(body)) {
+                log.warn("Gemini content suggestion fallback to template: invalid JSON fields");
                 return toContentSuggestion(template, AiGenerationSource.TEMPLATE);
             }
             return new ContentSuggestion(title.trim(), body.trim(), AiGenerationSource.AI);
         } catch (Exception exception) {
+            log.warn("Gemini content suggestion fallback to template: {}", exception.getMessage());
             return toContentSuggestion(template, AiGenerationSource.TEMPLATE);
         }
     }
@@ -90,17 +93,14 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
     @Override
     public AiGeneratedText generateInstagramCaption(InstagramCaptionPrompt prompt) {
         String template = templateProvider.instagramCaption(prompt);
-        if (!StringUtils.hasText(properties.apiKey())) {
-            return new AiGeneratedText(template, AiGenerationSource.TEMPLATE);
-        }
 
         String systemPrompt = """
-                당신은 소상공인 매장의 인스타그램 카피라이터입니다.
-                출력은 한국어 캡션 본문 텍스트만 작성하고, 코드블록/설명/불릿은 금지합니다.
+                당신은 소상공인 매장의 SNS 카피라이터입니다.
+                출력은 한국어 본문 텍스트만 작성하고, 코드블록/설명/불릿은 금지합니다.
                 말투는 정중하고 따뜻하게 유지합니다.
                 """;
         String userPrompt = """
-                아래 매장 정보를 참고해 인스타그램 캡션을 1개 생성하세요.
+                아래 매장 정보를 참고해 SNS 게시 문구를 1개 생성하세요.
                 - 매장명: %s
                 - 카테고리: %s
                 - 매장 말투: %s
@@ -123,7 +123,7 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
                 safe(prompt.contentBody())
         );
 
-        String aiResult = callOpenAi(systemPrompt, userPrompt);
+        String aiResult = callGemini(systemPrompt, userPrompt, false);
         if (!StringUtils.hasText(aiResult)) {
             return new AiGeneratedText(template, AiGenerationSource.TEMPLATE);
         }
@@ -133,9 +133,6 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
     @Override
     public AiGeneratedText generateReviewReply(ReviewReplyPrompt prompt) {
         String template = templateProvider.reviewReply(prompt);
-        if (!StringUtils.hasText(properties.apiKey())) {
-            return new AiGeneratedText(template, AiGenerationSource.TEMPLATE);
-        }
 
         String systemPrompt = """
                 당신은 매장 리뷰 답글 작성 비서입니다.
@@ -159,38 +156,54 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
                 safe(prompt.reviewContent())
         );
 
-        String aiResult = callOpenAi(systemPrompt, userPrompt);
+        String aiResult = callGemini(systemPrompt, userPrompt, false);
         if (!StringUtils.hasText(aiResult)) {
             return new AiGeneratedText(template, AiGenerationSource.TEMPLATE);
         }
         return new AiGeneratedText(aiResult.trim(), AiGenerationSource.AI);
     }
 
-    private String callOpenAi(String systemPrompt, String userPrompt) {
+    private String callGemini(String systemPrompt, String userPrompt, boolean jsonResponse) {
         try {
-            OpenAiChatCompletionResponse response = restClient.post()
-                    .uri("/v1/chat/completions")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header("Authorization", "Bearer " + properties.apiKey())
-                    .body(Map.of(
-                            "model", safeModel(),
-                            "temperature", safeTemperature(),
-                            "messages", List.of(
-                                    Map.of("role", "system", "content", systemPrompt),
-                                    Map.of("role", "user", "content", userPrompt)
-                            )
-                    ))
-                    .retrieve()
-                    .body(OpenAiChatCompletionResponse.class);
+            Content systemInstruction = Content.fromParts(Part.fromText(systemPrompt));
+            GenerateContentConfig.Builder configBuilder = GenerateContentConfig.builder()
+                    .temperature((float) safeTemperature())
+                    .maxOutputTokens(safeMaxOutputTokens())
+                    .systemInstruction(systemInstruction);
 
-            if (response == null || response.choices() == null || response.choices().isEmpty()) {
+            if (jsonResponse) {
+                configBuilder.responseMimeType("application/json");
+            }
+
+            GenerateContentResponse response = client.models.generateContent(
+                    safeModel(),
+                    userPrompt,
+                    configBuilder.build()
+            );
+
+            if (response == null) {
+                log.warn("Gemini API returned null response (model={})", safeModel());
                 return null;
             }
-            OpenAiMessage message = response.choices().get(0).message();
-            return message == null ? null : message.content();
+
+            String text = response.text();
+            return StringUtils.hasText(text) ? text : null;
         } catch (Exception exception) {
+            log.warn("Gemini API call failed (model={}): {}", safeModel(), exception.getMessage());
             return null;
         }
+    }
+
+    private String extractJsonPayload(String rawResponse) {
+        String trimmed = rawResponse.trim();
+        if (trimmed.startsWith("```")) {
+            int firstLineBreak = trimmed.indexOf('\n');
+            int closingFence = trimmed.lastIndexOf("```");
+            if (firstLineBreak >= 0 && closingFence > firstLineBreak) {
+                return trimmed.substring(firstLineBreak + 1, closingFence).trim();
+            }
+        }
+        return trimmed;
     }
 
     private ContentSuggestion toContentSuggestion(
@@ -201,29 +214,18 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
     }
 
     private String safeModel() {
-        return StringUtils.hasText(properties.model()) ? properties.model() : "gpt-4o-mini";
+        return StringUtils.hasText(properties.model()) ? properties.model() : "gemini-2.0-flash";
     }
 
     private double safeTemperature() {
         return properties.temperature() == null ? 0.7 : properties.temperature();
     }
 
+    private int safeMaxOutputTokens() {
+        return properties.maxOutputTokens() == null ? 1024 : properties.maxOutputTokens();
+    }
+
     private String safe(String value) {
         return StringUtils.hasText(value) ? value.trim() : "-";
-    }
-
-    private record OpenAiChatCompletionResponse(
-            List<OpenAiChoice> choices
-    ) {
-    }
-
-    private record OpenAiChoice(
-            OpenAiMessage message
-    ) {
-    }
-
-    private record OpenAiMessage(
-            String content
-    ) {
     }
 }
