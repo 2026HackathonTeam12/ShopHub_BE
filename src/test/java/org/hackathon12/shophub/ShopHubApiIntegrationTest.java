@@ -1333,6 +1333,7 @@ class ShopHubApiIntegrationTest {
                 "GET /api/integrations/mockmap/oauth/callback",
                 "GET /api/integrations/mockmap/oauth/start",
                 "GET /api/integrations/mockmap/oauth/status",
+                "GET /v1/auth/me",
                 "GET /v1/reviews/inbox",
                 "GET /v1/stores",
                 "GET /v1/stores/{storeId}/contents",
