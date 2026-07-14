@@ -31,7 +31,7 @@ mock-map:
     client-id: ${MOCK_MAP_OAUTH_CLIENT_ID:}
     client-secret: ${MOCK_MAP_OAUTH_CLIENT_SECRET:}
     refresh-token: ${MOCK_MAP_OAUTH_REFRESH_TOKEN:}
-    redirect-uri: ${MOCK_MAP_OAUTH_REDIRECT_URI:http://localhost:8080/api/integrations/mockmap/oauth/callback}
+    redirect-uri: ${MOCK_MAP_OAUTH_REDIRECT_URI:http://localhost:8080/api/integrations/MOCK_MAP/oauth/callback}
     authorize-path: ${MOCK_MAP_OAUTH_AUTHORIZE_PATH:/oauth/authorize/}
     revoke-path: ${MOCK_MAP_OAUTH_REVOKE_PATH:/oauth/revoke/}
     token-store-path: ${MOCK_MAP_OAUTH_TOKEN_STORE_PATH:./.mockmap-oauth-store.json}

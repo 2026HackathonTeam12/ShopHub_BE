@@ -950,11 +950,11 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void mockmap_oauth_endpoints_require_auth() throws Exception {
-        mockMvc.perform(get("/api/integrations/mockmap/oauth/status").param("storeId", STORE_ID))
+    void oauth_endpoints_require_auth() throws Exception {
+        mockMvc.perform(get("/api/integrations/oauth/status").param("storeId", STORE_ID))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(put("/api/integrations/mockmap/oauth/credentials")
+        mockMvc.perform(put("/api/integrations/MOCK_MAP/oauth/credentials")
                         .param("storeId", STORE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
@@ -963,44 +963,51 @@ class ShopHubApiIntegrationTest {
                         ))))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(delete("/api/integrations/mockmap/oauth/credentials").param("storeId", STORE_ID))
+        mockMvc.perform(delete("/api/integrations/MOCK_MAP/oauth/credentials").param("storeId", STORE_ID))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(post("/api/integrations/mockmap/oauth/disconnect").param("storeId", STORE_ID))
+        mockMvc.perform(post("/api/integrations/MOCK_MAP/oauth/disconnect").param("storeId", STORE_ID))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void mockmap_oauth_credentials_lifecycle_works_without_external_server() throws Exception {
+    void oauth_credentials_lifecycle_works_without_external_server() throws Exception {
         String request = objectMapper.writeValueAsString(Map.of(
                 "clientId", "mock-client-" + UUID.randomUUID(),
                 "clientSecret", "mock-secret-" + UUID.randomUUID()
         ));
 
-        mockMvc.perform(authed(put("/api/integrations/mockmap/oauth/credentials")
+        mockMvc.perform(authed(put("/api/integrations/MOCK_MAP/oauth/credentials")
                         .param("storeId", STORE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("MOCK_MAP"))
                 .andExpect(jsonPath("$.credentialsConfigured").value(true))
                 .andExpect(jsonPath("$.connected").value(false));
 
-        mockMvc.perform(authed(get("/api/integrations/mockmap/oauth/status").param("storeId", STORE_ID)))
+        mockMvc.perform(authed(get("/api/integrations/oauth/status").param("storeId", STORE_ID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.credentialsConfigured").value(true));
+                .andExpect(jsonPath("$[0].type").value("MOCK_MAP"))
+                .andExpect(jsonPath("$[0].credentialsConfigured").value(true));
 
-        mockMvc.perform(authed(post("/api/integrations/mockmap/oauth/disconnect").param("storeId", STORE_ID)))
+        mockMvc.perform(authed(post("/api/integrations/MOCK_MAP/oauth/disconnect").param("storeId", STORE_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.connected").value(false));
 
-        mockMvc.perform(authed(delete("/api/integrations/mockmap/oauth/credentials").param("storeId", STORE_ID)))
+        mockMvc.perform(authed(delete("/api/integrations/MOCK_MAP/oauth/credentials").param("storeId", STORE_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.credentialsConfigured").value(false));
+
+        mockMvc.perform(authed(get("/api/integrations/oauth/status").param("storeId", STORE_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
     }
 
     @Test
-    void mockmap_oauth_save_credentials_with_missing_values_returns_bad_request() throws Exception {
-        mockMvc.perform(authed(put("/api/integrations/mockmap/oauth/credentials")
+    void oauth_save_credentials_with_missing_values_returns_bad_request() throws Exception {
+        mockMvc.perform(authed(put("/api/integrations/MOCK_MAP/oauth/credentials")
                         .param("storeId", STORE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
@@ -1012,8 +1019,8 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void mockmap_oauth_callback_without_code_returns_bad_request_html() throws Exception {
-        mockMvc.perform(get("/api/integrations/mockmap/oauth/callback")
+    void oauth_callback_without_code_returns_bad_request_html() throws Exception {
+        mockMvc.perform(get("/api/integrations/MOCK_MAP/oauth/callback")
                         .param("state", "invalid-state"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
@@ -1021,8 +1028,8 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void mockmap_oauth_callback_with_error_param_returns_bad_request_html() throws Exception {
-        mockMvc.perform(get("/api/integrations/mockmap/oauth/callback")
+    void oauth_callback_with_error_param_returns_bad_request_html() throws Exception {
+        mockMvc.perform(get("/api/integrations/MOCK_MAP/oauth/callback")
                         .param("error", "access_denied"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
@@ -1030,10 +1037,10 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void mockmap_oauth_start_without_credentials_returns_bad_gateway() throws Exception {
+    void oauth_start_without_credentials_returns_bad_gateway() throws Exception {
         String isolatedStoreId = createIsolatedStore();
 
-        mockMvc.perform(authed(get("/api/integrations/mockmap/oauth/start").param("storeId", isolatedStoreId)))
+        mockMvc.perform(authed(get("/api/integrations/MOCK_MAP/oauth/start").param("storeId", isolatedStoreId)))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.code").value("MOCK_MAP_API_ERROR"));
     }
@@ -1242,7 +1249,7 @@ class ShopHubApiIntegrationTest {
     void mockmap_oauth_non_member_store_returns_403() throws Exception {
         String outsiderToken = signUpAndLogin("oauth-outsider-" + UUID.randomUUID() + "@business.kr");
 
-        mockMvc.perform(authedAs(outsiderToken, get("/api/integrations/mockmap/oauth/status").param("storeId", STORE_ID)))
+        mockMvc.perform(authedAs(outsiderToken, get("/api/integrations/oauth/status").param("storeId", STORE_ID)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
@@ -1327,12 +1334,12 @@ class ShopHubApiIntegrationTest {
                 .collect(Collectors.toCollection(TreeSet::new));
 
         Set<String> expectedEndpoints = new TreeSet<>(Set.of(
-                "DELETE /api/integrations/mockmap/oauth/credentials",
+                "DELETE /api/integrations/{type}/oauth/credentials",
                 "DELETE /v1/reviews/{reviewId}/reply",
                 "DELETE /v1/stores/{storeId}/profile/menus/{menuId}",
-                "GET /api/integrations/mockmap/oauth/callback",
-                "GET /api/integrations/mockmap/oauth/start",
-                "GET /api/integrations/mockmap/oauth/status",
+                "GET /api/integrations/oauth/status",
+                "GET /api/integrations/{type}/oauth/callback",
+                "GET /api/integrations/{type}/oauth/start",
                 "GET /v1/auth/me",
                 "GET /v1/reviews/inbox",
                 "GET /v1/stores",
@@ -1342,7 +1349,7 @@ class ShopHubApiIntegrationTest {
                 "GET /v1/stores/{storeId}/reviews",
                 "GET /v1/stores/{storeId}/reviews/summary",
                 "PATCH /v1/stores/{storeId}/contents/{contentId}/status",
-                "POST /api/integrations/mockmap/oauth/disconnect",
+                "POST /api/integrations/{type}/oauth/disconnect",
                 "POST /v1/auth/login",
                 "POST /v1/auth/logout",
                 "POST /v1/auth/signup",
@@ -1355,7 +1362,7 @@ class ShopHubApiIntegrationTest {
                 "POST /v1/stores/{storeId}/contents/instagram/publish-carousel",
                 "POST /v1/stores/{storeId}/profile/menus",
                 "POST /v1/stores/{storeId}/reviews/sync-mockmap",
-                "PUT /api/integrations/mockmap/oauth/credentials",
+                "PUT /api/integrations/{type}/oauth/credentials",
                 "PUT /v1/stores/{storeId}/profile/basic",
                 "PUT /v1/stores/{storeId}/profile/hours"
         ));

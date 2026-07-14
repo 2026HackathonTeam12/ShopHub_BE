@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ShopHub API
-  version: 0.2.1
+  version: 0.2.2
   description: |
     현재 코드 기준 API 명세서.
     패키지 구조(domain/global/infrastructure)에 맞춰 구현된 REST API를 기술한다.
@@ -11,6 +11,14 @@ info:
     `accessToken`을 `Authorization: Bearer {accessToken}` 헤더에 담아 호출한다.
     인증이 필요한 API에 토큰 없이 요청하면 `401 UNAUTHORIZED`가 반환된다.
     가게 멤버십이 필요한 API에서 권한이 없으면 `403 FORBIDDEN`이 반환된다.
+
+    ## OAuth 연동 (`OAuthIntegrationType`)
+    OAuth API 경로의 `{type}` 및 응답 필드 `type`은 **대문자 enum**을 사용합니다.
+    | type | 설명 |
+    |------|------|
+    | `MOCK_MAP` | MockMap 리뷰 조회/답글 발행 OAuth |
+
+    예시 경로: `/api/integrations/MOCK_MAP/oauth/start?storeId={storeId}`
 servers:
   - url: http://localhost:8080
     description: local
@@ -22,7 +30,7 @@ tags:
   - name: Store Profile
   - name: Reviews
   - name: Review Inbox
-  - name: MockMap OAuth
+  - name: OAuth Integration
 
 security:
   - BearerAuth: []
@@ -724,34 +732,64 @@ paths:
         '502':
           $ref: '#/components/responses/BadGateway'
 
-  /api/integrations/mockmap/oauth/credentials:
-    put:
-      tags: [MockMap OAuth]
-      summary: MockMap OAuth Client Credentials 등록
+  /api/integrations/oauth/status:
+    get:
+      tags: [OAuth Integration]
+      summary: OAuth 연동 목록 조회
       description: |
-        MockMap에서 발급받은 `clientId`, `clientSecret`을 가게별로 저장합니다.
-        이후 OAuth start 및 리뷰 답글 외부 발행에 사용됩니다.
-      operationId: saveMockMapCredentials
+        가게에 연동된 OAuth 플랫폼 목록을 반환합니다.
+        `credentialsConfigured` 또는 `connected`가 true인 항목만 포함됩니다.
+      operationId: listOAuthIntegrations
       parameters:
         - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/StoreIdQuery'
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OAuthConnectionStatus'
+              example:
+                - type: MOCK_MAP
+                  credentialsConfigured: true
+                  connected: false
+                  clientId: oci_example
+                  placeId: null
+                  placeName: null
+                  updatedAt: '2026-07-14T02:30:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/integrations/{type}/oauth/credentials:
+    put:
+      tags: [OAuth Integration]
+      summary: OAuth Client Credentials 등록
+      description: |
+        연동 플랫폼에서 발급받은 `clientId`, `clientSecret`을 가게별로 저장합니다.
+        이후 OAuth start 및 리뷰 답글 외부 발행에 사용됩니다.
+      operationId: saveOAuthCredentials
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/OAuthIntegrationType'
         - $ref: '#/components/parameters/StoreIdQuery'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MockMapSaveCredentialsRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+              $ref: '#/components/schemas/OAuthSaveCredentialsRequest'
       responses:
         '200':
           description: 저장 성공
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MockMapOAuthConnectionStatus'
+                $ref: '#/components/schemas/OAuthConnectionStatus'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -759,11 +797,12 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
     delete:
-      tags: [MockMap OAuth]
-      summary: MockMap OAuth Client Credentials 삭제
-      operationId: deleteMockMapCredentials
+      tags: [OAuth Integration]
+      summary: OAuth Client Credentials 삭제
+      operationId: deleteOAuthCredentials
       parameters:
         - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/OAuthIntegrationType'
         - $ref: '#/components/parameters/StoreIdQuery'
       responses:
         '200':
@@ -771,30 +810,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MockMapOAuthConnectionStatus'
+                $ref: '#/components/schemas/OAuthConnectionStatus'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
 
-  /api/integrations/mockmap/oauth/start:
+  /api/integrations/{type}/oauth/start:
     get:
-      tags: [MockMap OAuth]
-      summary: MockMap OAuth 인증 시작 (리다이렉트)
+      tags: [OAuth Integration]
+      summary: OAuth 인증 시작 (리다이렉트)
       description: |
-        MockMap OAuth authorize URL로 `302` 리다이렉트합니다.
+        연동 플랫폼 OAuth authorize URL로 `302` 리다이렉트합니다.
         **브라우저 주소창에 직접 URL을 입력하면 Authorization 헤더가 없어 401이 발생할 수 있습니다.**
         curl `-i`로 `Location` 헤더를 받아 해당 URL을 브라우저에서 여는 방식을 권장합니다.
-      operationId: startMockMapOAuth
+      operationId: startOAuth
       parameters:
         - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/OAuthIntegrationType'
         - $ref: '#/components/parameters/StoreIdQuery'
       responses:
         '302':
-          description: MockMap OAuth authorize URL로 리다이렉트
+          description: OAuth authorize URL로 리다이렉트
           headers:
             Location:
-              description: MockMap OAuth authorize URL
+              description: OAuth authorize URL
               schema:
                 type: string
         '401':
@@ -802,14 +842,17 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
-  /api/integrations/mockmap/oauth/callback:
+  /api/integrations/{type}/oauth/callback:
     get:
-      tags: [MockMap OAuth]
-      summary: MockMap OAuth 콜백 (공개)
-      description: MockMap이 authorization code를 전달하는 콜백 엔드포인트입니다. HTML 응답을 반환합니다.
-      operationId: mockMapOAuthCallback
+      tags: [OAuth Integration]
+      summary: OAuth 콜백 (공개)
+      description: |
+        연동 플랫폼이 authorization code를 전달하는 콜백 엔드포인트입니다. HTML 응답을 반환합니다.
+        MockMap redirect URI 예시: `http://localhost:8080/api/integrations/MOCK_MAP/oauth/callback`
+      operationId: oauthCallback
       security: []
       parameters:
+        - $ref: '#/components/parameters/OAuthIntegrationType'
         - in: query
           name: code
           required: false
@@ -839,33 +882,14 @@ paths:
               schema:
                 type: string
 
-  /api/integrations/mockmap/oauth/status:
-    get:
-      tags: [MockMap OAuth]
-      summary: MockMap OAuth 연동 상태 조회
-      operationId: getMockMapOAuthStatus
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationHeader'
-        - $ref: '#/components/parameters/StoreIdQuery'
-      responses:
-        '200':
-          description: 조회 성공
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MockMapOAuthConnectionStatus'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-
-  /api/integrations/mockmap/oauth/disconnect:
+  /api/integrations/{type}/oauth/disconnect:
     post:
-      tags: [MockMap OAuth]
-      summary: MockMap OAuth 연결 해제
-      operationId: disconnectMockMapOAuth
+      tags: [OAuth Integration]
+      summary: OAuth 연결 해제
+      operationId: disconnectOAuth
       parameters:
         - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/OAuthIntegrationType'
         - $ref: '#/components/parameters/StoreIdQuery'
       responses:
         '200':
@@ -873,7 +897,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MockMapOAuthConnectionStatus'
+                $ref: '#/components/schemas/OAuthConnectionStatus'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -909,6 +933,16 @@ components:
       schema:
         type: string
         format: uuid
+    OAuthIntegrationType:
+      in: path
+      name: type
+      required: true
+      description: |
+        OAuth 연동 플랫폼 식별자 (`OAuthIntegrationType` enum, **대문자**).
+        사용 가능한 값: `MOCK_MAP`
+      schema:
+        $ref: '#/components/schemas/OAuthIntegrationType'
+      example: MOCK_MAP
     StoreId:
       in: path
       name: storeId
@@ -971,21 +1005,37 @@ components:
             $ref: '#/components/schemas/ApiErrorResponse'
 
   schemas:
-    MockMapSaveCredentialsRequest:
+    OAuthIntegrationType:
+      type: string
+      title: OAuth 연동 플랫폼 타입
+      description: |
+        ShopHub에서 지원하는 OAuth 연동 플랫폼 식별자입니다.
+        경로 파라미터 `{type}` 및 응답 필드 `type`에 **대문자 enum 값**으로 사용됩니다.
+      enum:
+        - MOCK_MAP
+      x-enum-varnames:
+        - MOCK_MAP
+      x-enum-descriptions:
+        - MockMap 리뷰 조회/답글 발행 OAuth 연동
+      example: MOCK_MAP
+
+    OAuthSaveCredentialsRequest:
       type: object
       required: [clientId, clientSecret]
       properties:
         clientId:
           type: string
-          description: MockMap OAuth client ID (oci_ prefix)
+          description: OAuth client ID
         clientSecret:
           type: string
-          description: MockMap OAuth client secret (ocs_ prefix)
+          description: OAuth client secret
 
-    MockMapOAuthConnectionStatus:
+    OAuthConnectionStatus:
       type: object
-      required: [credentialsConfigured, connected, clientId, placeId, placeName, updatedAt]
+      required: [type, credentialsConfigured, connected, clientId, placeId, placeName, updatedAt]
       properties:
+        type:
+          $ref: '#/components/schemas/OAuthIntegrationType'
         credentialsConfigured:
           type: boolean
         connected:

@@ -19,7 +19,6 @@ public class ShopHubAuthenticationFilter extends OncePerRequestFilter {
 
     private static final List<String> PUBLIC_PATH_PREFIXES = List.of(
             "/v1/auth/",
-            "/api/integrations/mockmap/oauth/callback",
             "/v3/api-docs",
             "/swagger-ui",
             "/uploads/"
@@ -40,7 +39,14 @@ public class ShopHubAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String path = request.getRequestURI();
+        if (isOAuthCallbackPath(path)) {
+            return true;
+        }
         return PUBLIC_PATH_PREFIXES.stream().anyMatch(path::startsWith);
+    }
+
+    private boolean isOAuthCallbackPath(String path) {
+        return path != null && path.matches("/api/integrations/[^/]+/oauth/callback");
     }
 
     @Override

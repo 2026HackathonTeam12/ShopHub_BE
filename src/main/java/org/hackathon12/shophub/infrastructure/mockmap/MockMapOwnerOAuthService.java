@@ -288,8 +288,8 @@ public class MockMapOwnerOAuthService {
         if (!StringUtils.hasText(clientId) || !StringUtils.hasText(clientSecret) || !StringUtils.hasText(refreshToken)) {
             throw new MockMapApiException(
                     "MockMap OAuth가 연결되지 않았습니다. "
-                            + "PUT /api/integrations/mockmap/oauth/credentials 로 client_id/client_secret을 등록한 뒤 "
-                            + "GET /api/integrations/mockmap/oauth/start?storeId={storeId} 로 연결해 주세요."
+                            + "PUT /api/integrations/MOCK_MAP/oauth/credentials 로 client_id/client_secret을 등록한 뒤 "
+                            + "GET /api/integrations/MOCK_MAP/oauth/start?storeId={storeId} 로 연결해 주세요."
             );
         }
 
@@ -350,7 +350,7 @@ public class MockMapOwnerOAuthService {
                 .orElseThrow(() -> new MockMapApiException(
                         "MockMap OAuth credentials가 설정되지 않았습니다. "
                                 + "MockMap /owner/account/ 에서 client_id/client_secret을 확인한 뒤 "
-                                + "PUT /api/integrations/mockmap/oauth/credentials?storeId=" + storeId
+                                + "PUT /api/integrations/MOCK_MAP/oauth/credentials?storeId=" + storeId
                                 + " 로 등록해 주세요."
                 ));
     }
