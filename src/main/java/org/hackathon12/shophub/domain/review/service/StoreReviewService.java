@@ -4,6 +4,7 @@ import org.hackathon12.shophub.domain.ai.model.AiGeneratedText;
 import org.hackathon12.shophub.domain.ai.model.ReviewReplyPrompt;
 import org.hackathon12.shophub.domain.ai.service.AiTextGenerationService;
 import org.hackathon12.shophub.domain.review.model.ReviewInbox;
+import org.hackathon12.shophub.domain.review.model.ReviewPlatform;
 import org.hackathon12.shophub.domain.review.model.StoreReview;
 import org.hackathon12.shophub.domain.review.model.StoreReviewSummary;
 import org.hackathon12.shophub.domain.review.port.ReviewReplyPublisherPort;
@@ -122,7 +123,7 @@ public class StoreReviewService {
                 .map(review -> new StoreReview(
                         UUID.randomUUID(),
                         storeId,
-                        review.sourcePlatform(),
+                        ReviewPlatform.fromValue(review.sourcePlatform()).name(),
                         review.sourceReviewId(),
                         review.authorName(),
                         review.rating(),

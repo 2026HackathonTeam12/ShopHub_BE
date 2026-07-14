@@ -2,6 +2,7 @@ package org.hackathon12.shophub.domain.content.service;
 
 import org.hackathon12.shophub.domain.ai.model.ContentSuggestionPrompt;
 import org.hackathon12.shophub.domain.ai.service.AiTextGenerationService;
+import org.hackathon12.shophub.domain.content.model.ContentChannel;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
@@ -57,12 +58,13 @@ public class ContentService {
 
     public ContentItem createContent(UUID storeId, String title, String body, List<String> channels) {
         storeProfileService.getStore(storeId);
+        List<String> normalizedChannels = ContentChannel.normalizeAll(channels);
         ContentItem contentItem = new ContentItem(
                 UUID.randomUUID(),
                 storeId,
                 title,
                 body,
-                channels,
+                normalizedChannels,
                 ContentStatus.DRAFT,
                 Instant.now()
         );

@@ -1,5 +1,6 @@
 package org.hackathon12.shophub.domain.dashboard.service;
 
+import org.hackathon12.shophub.domain.content.model.ContentChannel;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
 import org.hackathon12.shophub.domain.content.service.ContentService;
@@ -24,7 +25,11 @@ import java.util.UUID;
 public class DashboardService {
 
     private static final int MAX_DRAFT_CHAR_COUNT = 2200;
-    private static final List<String> DEFAULT_CHANNELS = List.of("Instagram", "네이버 플레이스", "Google Business");
+    private static final List<String> DEFAULT_CHANNELS = List.of(
+            ContentChannel.INSTAGRAM.name(),
+            ContentChannel.NAVER_BLOG.name(),
+            ContentChannel.FACEBOOK.name()
+    );
 
     private final StoreProfileService storeProfileService;
     private final ContentService contentService;

@@ -1,5 +1,6 @@
 package org.hackathon12.shophub.infrastructure.web.content;
 
+import org.hackathon12.shophub.domain.content.model.ContentChannel;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
@@ -59,7 +60,7 @@ public class ContentController {
             throw new IllegalArgumentException("콘텐츠 생성에는 title/body가 필요합니다.");
         }
         List<String> channels = requestBody.channels() == null || requestBody.channels().isEmpty()
-                ? List.of("Instagram")
+                ? List.of(ContentChannel.INSTAGRAM.name())
                 : requestBody.channels();
         ContentItem created = contentService.createContent(storeId, requestBody.title(), requestBody.body(), channels);
         return ResponseEntity.status(201).body(created);

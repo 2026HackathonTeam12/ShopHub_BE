@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ShopHub API
-  version: 0.2.2
+  version: 0.2.7
   description: |
     현재 코드 기준 API 명세서.
     패키지 구조(domain/global/infrastructure)에 맞춰 구현된 REST API를 기술한다.
@@ -19,6 +19,17 @@ info:
     | `MOCK_MAP` | MockMap 리뷰 조회/답글 발행 OAuth |
 
     예시 경로: `/api/integrations/MOCK_MAP/oauth/start?storeId={storeId}`
+
+    ## 콘텐츠 게시 채널 (`ContentChannel`)
+    SNS 게시 API 경로의 `{type}`은 **대문자 enum**을 사용합니다.
+    | type | 설명 |
+    |------|------|
+    | `INSTAGRAM` | Instagram Graph API 게시 (구현됨) |
+    | `NAVER_BLOG` | 네이버 블로그 게시 (미구현) |
+    | `FACEBOOK` | Facebook 게시 (미구현) |
+
+    예시 경로: `POST /v1/stores/{storeId}/contents/INSTAGRAM/publish-carousel`
+    요청 본문에 Instagram 등이 접근 가능한 **공개 이미지 URL**(`imageUrls`)을 전달합니다.
 servers:
   - url: http://localhost:8080
     description: local
@@ -254,6 +265,16 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ContentItem'
+              example:
+                - id: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                  storeId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                  title: 연남동 산책 후 들르는 커피
+                  body: 버터 취향시에와 모모 라떼를 추천드립니다.
+                  channels:
+                    - INSTAGRAM
+                    - NAVER_BLOG
+                  status: DRAFT
+                  updatedAt: '2026-07-14T02:47:59.002Z'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -345,37 +366,35 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /v1/stores/{storeId}/contents/instagram/publish-carousel:
+  /v1/stores/{storeId}/contents/{type}/publish-carousel:
     post:
       tags: [Content]
-      summary: 인스타그램 이미지 게시 (1장 이상)
+      summary: SNS 콘텐츠 이미지 게시 (1장 이상)
       description: |
-        로컬 업로드 이미지를 저장 후 공개 URL로 변환하고,
-        가게/콘텐츠/운영시간 정보를 바탕으로 AI 캡션을 생성한 뒤 Instagram Graph API로 게시한다.
+        `type`은 콘텐츠 게시 채널(`ContentChannel`) **대문자 enum**입니다.
+        사용 가능한 값: `INSTAGRAM`, `NAVER_BLOG`, `FACEBOOK`
+
+        요청 본문의 `imageUrls`에 **공개 접근 가능한 이미지 URL**을 1~10개 전달합니다.
+        가게/콘텐츠/운영시간 정보를 바탕으로 AI 캡션을 생성한 뒤 해당 채널 API로 게시합니다.
         - 1장이면 단일 이미지 게시
-        - 2장 이상이면 캐러셀 게시
-      operationId: publishInstagramCarousel
+        - 2장 이상이면 캐러셀 게시 (Instagram)
+        - Instagram Graph API는 URL에서 이미지를 직접 가져오므로, localhost 전용 URL은 사용할 수 없습니다.
+        - 현재 `INSTAGRAM`만 구현되어 있으며, `NAVER_BLOG`/`FACEBOOK`은 추후 지원 예정입니다.
+      operationId: publishContentCarousel
       parameters:
         - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
+        - $ref: '#/components/parameters/ContentChannelType'
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
-              type: object
-              required: [images]
-              properties:
-                images:
-                  type: array
-                  minItems: 1
-                  items:
-                    type: string
-                    format: binary
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+              $ref: '#/components/schemas/PublishContentCarouselRequest'
+            example:
+              imageUrls:
+                - https://picsum.photos/id/1015/1080/1080
+                - https://picsum.photos/id/1016/1080/1080
       responses:
         '200':
           description: 게시 성공
@@ -383,8 +402,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InstagramPublishResult'
+              example:
+                mediaId: "18078386915310732"
+                caption: "연남동 산책 후 들르기 좋은 카페 ☕"
+                imageUrls:
+                  - https://picsum.photos/id/1015/1080/1080
+                  - https://picsum.photos/id/1016/1080/1080
+                profileUrl: https://www.instagram.com/commentcopybot/
+                publishedAt: '2026-07-14T03:00:00.000Z'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '502':
           $ref: '#/components/responses/BadGateway'
 
@@ -943,6 +976,16 @@ components:
       schema:
         $ref: '#/components/schemas/OAuthIntegrationType'
       example: MOCK_MAP
+    ContentChannelType:
+      in: path
+      name: type
+      required: true
+      description: |
+        콘텐츠 게시 채널 (`ContentChannel` enum, **대문자**).
+        사용 가능한 값: `INSTAGRAM`, `NAVER_BLOG`, `FACEBOOK`
+      schema:
+        $ref: '#/components/schemas/ContentChannel'
+      example: INSTAGRAM
     StoreId:
       in: path
       name: storeId
@@ -1017,6 +1060,49 @@ components:
         - MOCK_MAP
       x-enum-descriptions:
         - MockMap 리뷰 조회/답글 발행 OAuth 연동
+      example: MOCK_MAP
+
+    ContentChannel:
+      type: string
+      title: 콘텐츠 게시 채널 (SNS)
+      description: |
+        콘텐츠 `channels` 필드에 사용하는 **대문자 enum**입니다.
+        SNS 게시 채널만 허용합니다.
+      enum:
+        - INSTAGRAM
+        - NAVER_BLOG
+        - FACEBOOK
+      x-enum-varnames:
+        - INSTAGRAM
+        - NAVER_BLOG
+        - FACEBOOK
+      x-enum-descriptions:
+        - Instagram 콘텐츠/게시 연동
+        - 네이버 블로그 게시
+        - Facebook 게시
+      example: INSTAGRAM
+
+    ReviewPlatform:
+      type: string
+      title: 리뷰 출처 플랫폼 (지도)
+      description: |
+        리뷰 `platform`, `sourcePlatform` 필드에 사용하는 **대문자 enum**입니다.
+        지도/리뷰 플랫폼만 허용합니다.
+      enum:
+        - MOCK_MAP
+        - KAKAO_MAP
+        - GOOGLE_MAP
+        - NAVER_MAP
+      x-enum-varnames:
+        - MOCK_MAP
+        - KAKAO_MAP
+        - GOOGLE_MAP
+        - NAVER_MAP
+      x-enum-descriptions:
+        - MockMap 리뷰 조회/답글 연동
+        - 카카오맵 리뷰
+        - Google Maps 리뷰
+        - 네이버 지도 리뷰
       example: MOCK_MAP
 
     OAuthSaveCredentialsRequest:
@@ -1145,7 +1231,10 @@ components:
         channels:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/ContentChannel'
+          example:
+            - INSTAGRAM
+            - NAVER_BLOG
 
     DashboardSuggestionCard:
       type: object
@@ -1217,25 +1306,52 @@ components:
         channels:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/ContentChannel'
+          example:
+            - INSTAGRAM
+            - NAVER_BLOG
         status:
           $ref: '#/components/schemas/ContentStatus'
         updatedAt:
           type: string
           format: date-time
 
+    PublishContentCarouselRequest:
+      type: object
+      required: [imageUrls]
+      properties:
+        imageUrls:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+            format: uri
+          description: Instagram 등 SNS API가 접근 가능한 공개 이미지 URL 목록
+          example:
+            - https://picsum.photos/id/1015/1080/1080
+            - https://picsum.photos/id/1016/1080/1080
+
     InstagramPublishResult:
       type: object
-      required: [mediaId, caption, imageUrls, publishedAt]
+      required: [mediaId, caption, imageUrls, profileUrl, publishedAt]
       properties:
         mediaId:
           type: string
+          description: Instagram Graph API에서 반환한 게시 Media ID
         caption:
           type: string
+          description: AI가 생성해 게시에 사용한 캡션
         imageUrls:
           type: array
           items:
             type: string
+            format: uri
+          description: 게시에 사용된 공개 이미지 URL 목록
+        profileUrl:
+          type: string
+          format: uri
+          description: 게시된 Instagram 프로필 URL
         publishedAt:
           type: string
           format: date-time
@@ -1253,7 +1369,9 @@ components:
         channels:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/ContentChannel'
+          example:
+            - INSTAGRAM
         aiSuggest:
           type: boolean
           default: false
@@ -1451,8 +1569,7 @@ components:
       required: [platform, totalReviewCount, syncedReviewCount, externalUrl]
       properties:
         platform:
-          type: string
-          example: GOOGLE
+          $ref: '#/components/schemas/ReviewPlatform'
         totalReviewCount:
           type: integer
         syncedReviewCount:
@@ -1471,8 +1588,7 @@ components:
           type: string
           format: uuid
         platform:
-          type: string
-          example: GOOGLE
+          $ref: '#/components/schemas/ReviewPlatform'
         authorName:
           type: string
         rating:
@@ -1564,7 +1680,7 @@ components:
       required: [sourcePlatform, placeId, storeName, authorName, rating, content, reviewedAt]
       properties:
         sourcePlatform:
-          type: string
+          $ref: '#/components/schemas/ReviewPlatform'
         placeId:
           type: string
         storeName:

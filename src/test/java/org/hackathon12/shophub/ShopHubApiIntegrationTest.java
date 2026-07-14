@@ -9,9 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import tools.jackson.databind.ObjectMapper;
@@ -29,7 +27,6 @@ import java.util.stream.Collectors;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -80,10 +77,6 @@ class ShopHubApiIntegrationTest {
 
     private MockHttpServletRequestBuilder authed(MockHttpServletRequestBuilder builder) throws Exception {
         return builder.header("Authorization", "Bearer " + seedToken());
-    }
-
-    private MockMultipartHttpServletRequestBuilder authed(MockMultipartHttpServletRequestBuilder builder) throws Exception {
-        return (MockMultipartHttpServletRequestBuilder) builder.header("Authorization", "Bearer " + seedToken());
     }
 
     private String loginAsSeedUser() throws Exception {
@@ -579,6 +572,9 @@ class ShopHubApiIntegrationTest {
                 "content", "소중한 리뷰 감사합니다. 더 좋은 경험으로 보답하겠습니다."
         ));
 
+        mockMvc.perform(authed(delete("/v1/reviews/{reviewId}/reply", THIRD_REVIEW_ID)))
+                .andExpect(status().isOk());
+
         mockMvc.perform(authed(post("/v1/reviews/{reviewId}/reply", THIRD_REVIEW_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(replyRequest)))
@@ -658,56 +654,65 @@ class ShopHubApiIntegrationTest {
 
     @Test
     void instagram_publish_returns_400_when_credentials_missing() throws Exception {
-        MockMultipartFile image1 = new MockMultipartFile(
-                "images",
-                "first.jpg",
-                "image/jpeg",
-                new byte[]{1, 2, 3}
-        );
-        MockMultipartFile image2 = new MockMultipartFile(
-                "images",
-                "second.jpg",
-                "image/jpeg",
-                new byte[]{4, 5, 6}
+        String request = publishCarouselRequest(
+                "https://picsum.photos/id/1015/1080/1080",
+                "https://picsum.photos/id/1016/1080/1080"
         );
 
-        MockMultipartHttpServletRequestBuilder request = multipart("/v1/stores/{storeId}/contents/instagram/publish-carousel", STORE_ID)
-                .file(image1)
-                .file(image2);
-
-        mockMvc.perform(authed(request))
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/INSTAGRAM/publish-carousel", STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test
-    void instagram_publish_requires_at_least_one_image() throws Exception {
-        MockMultipartHttpServletRequestBuilder request = multipart("/v1/stores/{storeId}/contents/instagram/publish-carousel", STORE_ID);
-
-        mockMvc.perform(authed(request))
-                .andExpect(status().isBadRequest());
+    void instagram_publish_requires_at_least_one_image_url() throws Exception {
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/INSTAGRAM/publish-carousel", STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("imageUrls", List.of())))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
 
     @Test
-    void instagram_publish_rejects_non_image_file() throws Exception {
-        MockMultipartFile image1 = new MockMultipartFile(
-                "images",
-                "first.jpg",
-                "image/jpeg",
-                new byte[]{1, 2, 3}
-        );
-        MockMultipartFile image2 = new MockMultipartFile(
-                "images",
-                "not-image.txt",
-                "text/plain",
-                "not-image".getBytes()
+    void content_publish_rejects_unsupported_channel() throws Exception {
+        String request = publishCarouselRequest("https://picsum.photos/id/1015/1080/1080");
+
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/NAVER_BLOG/publish-carousel", STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/FACEBOOK/publish-carousel", STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void content_publish_rejects_invalid_channel_type() throws Exception {
+        String request = publishCarouselRequest("https://picsum.photos/id/1015/1080/1080");
+
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/MOCK_MAP/publish-carousel", STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void content_publish_rejects_invalid_image_url() throws Exception {
+        String request = publishCarouselRequest(
+                "https://picsum.photos/id/1015/1080/1080",
+                "not-a-valid-url"
         );
 
-        MockMultipartHttpServletRequestBuilder request = multipart("/v1/stores/{storeId}/contents/instagram/publish-carousel", STORE_ID)
-                .file(image1)
-                .file(image2);
-
-        mockMvc.perform(authed(request))
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/INSTAGRAM/publish-carousel", STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }
@@ -751,7 +756,7 @@ class ShopHubApiIntegrationTest {
     @Test
     void content_create_without_title_and_body_returns_400() throws Exception {
         String request = objectMapper.writeValueAsString(Map.of(
-                "channels", List.of("Instagram")
+                "channels", List.of("INSTAGRAM")
         ));
 
         mockMvc.perform(authed(post("/v1/stores/{storeId}/contents", STORE_ID)
@@ -1058,15 +1063,11 @@ class ShopHubApiIntegrationTest {
 
     @Test
     void instagram_publish_for_unknown_store_returns_404() throws Exception {
-        MockMultipartFile image = new MockMultipartFile(
-                "images",
-                "test.jpg",
-                "image/jpeg",
-                new byte[]{1, 2, 3}
-        );
+        String request = publishCarouselRequest("https://picsum.photos/id/1015/1080/1080");
 
-        mockMvc.perform(authed(multipart("/v1/stores/{storeId}/contents/instagram/publish-carousel", NOT_FOUND_STORE_ID)
-                        .file(image)))
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/INSTAGRAM/publish-carousel", NOT_FOUND_STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
@@ -1316,7 +1317,7 @@ class ShopHubApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRequest)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.channels[0]").value("Instagram"));
+                .andExpect(jsonPath("$.channels[0]").value("INSTAGRAM"));
     }
 
     @Test
@@ -1359,7 +1360,7 @@ class ShopHubApiIntegrationTest {
                 "POST /v1/stores",
                 "POST /v1/stores/{storeId}/contents",
                 "POST /v1/stores/{storeId}/contents/{contentId}/retry",
-                "POST /v1/stores/{storeId}/contents/instagram/publish-carousel",
+                "POST /v1/stores/{storeId}/contents/{type}/publish-carousel",
                 "POST /v1/stores/{storeId}/profile/menus",
                 "POST /v1/stores/{storeId}/reviews/sync-mockmap",
                 "PUT /api/integrations/{type}/oauth/credentials",
@@ -1368,6 +1369,10 @@ class ShopHubApiIntegrationTest {
         ));
 
         Assertions.assertEquals(expectedEndpoints, actualEndpoints);
+    }
+
+    private String publishCarouselRequest(String... imageUrls) throws Exception {
+        return objectMapper.writeValueAsString(Map.of("imageUrls", List.of(imageUrls)));
     }
 
     private String createIsolatedStore() throws Exception {

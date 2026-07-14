@@ -4,6 +4,7 @@ import org.hackathon12.shophub.domain.ai.model.AiGeneratedText;
 import org.hackathon12.shophub.domain.ai.model.InstagramCaptionPrompt;
 import org.hackathon12.shophub.domain.ai.service.AiTextGenerationService;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
+import org.hackathon12.shophub.domain.content.model.ContentChannel;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
 import org.hackathon12.shophub.domain.content.service.ContentService;
 import org.hackathon12.shophub.domain.instagram.model.InstagramPublishResult;
@@ -91,7 +92,7 @@ public class InstagramPublishService {
                 storeId,
                 "오늘의 매장 소식",
                 "매장 운영 정보와 메뉴 소식을 전합니다.",
-                List.of("Instagram"),
+                List.of(ContentChannel.INSTAGRAM.name()),
                 ContentStatus.DRAFT,
                 Instant.now()
         );

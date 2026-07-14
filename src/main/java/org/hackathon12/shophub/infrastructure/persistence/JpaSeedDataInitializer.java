@@ -1,6 +1,7 @@
 package org.hackathon12.shophub.infrastructure.persistence;
 
 import org.hackathon12.shophub.domain.auth.model.UserAccount;
+import org.hackathon12.shophub.domain.content.model.ContentChannel;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
 import org.hackathon12.shophub.domain.review.model.StoreReview;
@@ -104,7 +105,7 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                         STORE_ID,
                         "비 오는 날, 따뜻한 라떼",
                         "비 오는 오늘, 따뜻한 라떼 한 잔으로 잠깐 쉬어가세요.",
-                        List.of("Instagram"),
+                        List.of(ContentChannel.INSTAGRAM.name()),
                         ContentStatus.PUBLISHED,
                         now.minusSeconds(3600)
                 ),
@@ -113,7 +114,7 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                         STORE_ID,
                         "연남동 산책 후 들르는 커피",
                         "산책 후엔 버터 취향시에와 모모 라떼가 좋아요.",
-                        List.of("Instagram", "Google"),
+                        List.of(ContentChannel.INSTAGRAM.name(), ContentChannel.FACEBOOK.name()),
                         ContentStatus.DRAFT,
                         now.minusSeconds(7200)
                 ),
@@ -122,7 +123,7 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                         STORE_ID,
                         "여름 시즌 라떼 출시",
                         "시즌 한정 라떼를 이번 주부터 제공합니다.",
-                        List.of("Google Business"),
+                        List.of(ContentChannel.NAVER_BLOG.name()),
                         ContentStatus.FAILED,
                         now.minusSeconds(86400)
                 ),
@@ -131,7 +132,11 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                         STORE_ID,
                         "7월 휴무일 안내",
                         "휴무일을 미리 확인해주세요.",
-                        List.of("전체 채널"),
+                        List.of(
+                                ContentChannel.INSTAGRAM.name(),
+                                ContentChannel.NAVER_BLOG.name(),
+                                ContentChannel.FACEBOOK.name()
+                        ),
                         ContentStatus.SCHEDULED,
                         now.minusSeconds(172800)
                 )
