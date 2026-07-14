@@ -11,6 +11,8 @@ import org.hackathon12.shophub.domain.review.service.StoreReviewService;
 import org.hackathon12.shophub.domain.store.model.BusinessHour;
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
 import org.hackathon12.shophub.domain.store.service.StoreProfileService;
+import org.hackathon12.shophub.domain.weather.model.WeatherSnapshot;
+import org.hackathon12.shophub.infrastructure.weather.openmeteo.OpenMeteoWeatherClient;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -34,15 +36,21 @@ public class DashboardService {
     private final StoreProfileService storeProfileService;
     private final ContentService contentService;
     private final StoreReviewService storeReviewService;
+    private final OpenMeteoWeatherClient weatherClient;
+    private final WeatherOperationSuggestionService weatherOperationSuggestionService;
 
     public DashboardService(
             StoreProfileService storeProfileService,
             ContentService contentService,
-            StoreReviewService storeReviewService
+            StoreReviewService storeReviewService,
+            OpenMeteoWeatherClient weatherClient,
+            WeatherOperationSuggestionService weatherOperationSuggestionService
     ) {
         this.storeProfileService = storeProfileService;
         this.contentService = contentService;
         this.storeReviewService = storeReviewService;
+        this.weatherClient = weatherClient;
+        this.weatherOperationSuggestionService = weatherOperationSuggestionService;
     }
 
     public DashboardOverview getOverview(UUID storeId) {
@@ -81,7 +89,7 @@ public class DashboardService {
                 storeId,
                 store.name(),
                 draftContent,
-                buildSuggestionCard(latestDraft),
+                buildSuggestionCard(store, latestDraft),
                 new DashboardOverview.ReviewWidget(
                         summary.externalTotalReviewCount(),
                         summary.localSyncedReviewCount(),
@@ -93,19 +101,9 @@ public class DashboardService {
         );
     }
 
-    private DashboardOverview.SuggestionCard buildSuggestionCard(ContentItem latestDraft) {
-        if (latestDraft == null) {
-            return new DashboardOverview.SuggestionCard(
-                    "오늘의 운영 제안",
-                    "아직 작성 중인 초안이 없습니다. 오늘의 메뉴나 이벤트로 콘텐츠를 시작해 보세요.",
-                    "이 주제로 콘텐츠 만들기"
-            );
-        }
-        return new DashboardOverview.SuggestionCard(
-                "오늘의 운영 제안",
-                "작성 중인 초안이 있습니다. 지금 검토하고 게시해 보세요.",
-                "초안 이어서 작성하기"
-        );
+    private DashboardOverview.SuggestionCard buildSuggestionCard(StoreProfile store, ContentItem latestDraft) {
+        WeatherSnapshot weather = weatherClient.lookupByAddress(store.address()).orElse(null);
+        return weatherOperationSuggestionService.buildSuggestionCard(weather, latestDraft != null);
     }
 
     private List<DashboardOverview.ChecklistItem> buildChecklist(

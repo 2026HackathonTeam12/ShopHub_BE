@@ -55,6 +55,26 @@ public class XPublishService {
 
     public InstagramPublishResult publishContent(UUID storeId, ContentItem content, List<String> imageUrls) {
         StoreProfile store = storeProfileService.getStore(storeId);
+        String tweetText = resolvePostText(storeId, store, content);
+        String tweetId = xPublishPort.publishPost(storeId, tweetText, imageUrls);
+        XOAuthConnectionStatus connection = xOwnerOAuthService.getConnectionStatus(storeId);
+
+        return new InstagramPublishResult(
+                tweetId,
+                tweetText,
+                imageUrls,
+                profileUrl(connection.xUsername()),
+                Instant.now()
+        );
+    }
+
+    private String resolvePostText(UUID storeId, StoreProfile store, ContentItem content) {
+        if (StringUtils.hasText(content.body())) {
+            if (StringUtils.hasText(content.title())) {
+                return content.title() + "\n\n" + content.body();
+            }
+            return content.body();
+        }
 
         InstagramCaptionPrompt prompt = new InstagramCaptionPrompt(
                 store.name(),
@@ -66,17 +86,7 @@ public class XPublishService {
                 content.body()
         );
         AiGeneratedText suggestion = aiTextGenerationService.suggestInstagramCaption(prompt);
-        String tweetText = suggestion.text();
-        String tweetId = xPublishPort.publishPost(storeId, tweetText, imageUrls);
-        XOAuthConnectionStatus connection = xOwnerOAuthService.getConnectionStatus(storeId);
-
-        return new InstagramPublishResult(
-                tweetId,
-                tweetText,
-                imageUrls,
-                profileUrl(connection.xUsername()),
-                Instant.now()
-        );
+        return suggestion.text();
     }
 
     private String profileUrl(String xUsername) {

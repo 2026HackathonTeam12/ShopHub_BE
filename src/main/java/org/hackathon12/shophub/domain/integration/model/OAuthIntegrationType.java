@@ -7,7 +7,9 @@ import java.util.Arrays;
 
 public enum OAuthIntegrationType {
     MOCK_MAP("MOCK_MAP"),
-    X("X");
+    X("X"),
+    INSTAGRAM("INSTAGRAM"),
+    FACEBOOK("FACEBOOK");
 
     private final String pathValue;
 

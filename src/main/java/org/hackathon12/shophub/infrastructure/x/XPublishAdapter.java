@@ -2,15 +2,20 @@ package org.hackathon12.shophub.infrastructure.x;
 
 import org.hackathon12.shophub.domain.x.port.XPublishPort;
 import org.hackathon12.shophub.infrastructure.x.oauth.XOwnerOAuthService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Component
 public class XPublishAdapter implements XPublishPort {
+
+    private static final Logger log = LoggerFactory.getLogger(XPublishAdapter.class);
 
     private static final int MAX_IMAGES = 4;
     private static final int MAX_TWEET_LENGTH = 280;
@@ -36,17 +41,44 @@ public class XPublishAdapter implements XPublishPort {
         ensurePublishReady(storeId);
         validateImages(imageUrls);
 
-        String accessToken = xOwnerOAuthService.getAccessToken(storeId);
         String tweetText = normalizeTweetText(text);
-        List<String> mediaIds = uploadImages(accessToken, imageUrls);
-        return xApiClient.publishTweet(accessToken, tweetText, mediaIds);
+        return withFreshAccessToken(storeId, accessToken -> {
+            List<String> mediaIds = uploadImagesOrEmpty(accessToken, imageUrls);
+            return xApiClient.publishTweet(accessToken, tweetText, mediaIds);
+        });
     }
 
-    private List<String> uploadImages(String accessToken, List<String> imageUrls) {
+    private String withFreshAccessToken(UUID storeId, Function<String, String> action) {
+        try {
+            return action.apply(xOwnerOAuthService.getAccessToken(storeId));
+        } catch (XApiException exception) {
+            if (!isUnauthorized(exception)) {
+                throw exception;
+            }
+            log.warn("X access token rejected, refreshing and retrying: storeId={}", storeId);
+            xOwnerOAuthService.invalidateAccessToken(storeId);
+            return action.apply(xOwnerOAuthService.getAccessToken(storeId));
+        }
+    }
+
+    private List<String> uploadImagesOrEmpty(String accessToken, List<String> imageUrls) {
         if (imageUrls == null || imageUrls.isEmpty()) {
             return List.of();
         }
 
+        try {
+            return uploadImages(accessToken, imageUrls);
+        } catch (XApiException exception) {
+            if (isUnauthorized(exception)) {
+                throw exception;
+            }
+            // Free/dev tier or missing media.write often blocks upload; text post still works.
+            log.warn("X media upload failed, publishing text-only: {}", exception.getMessage());
+            return List.of();
+        }
+    }
+
+    private List<String> uploadImages(String accessToken, List<String> imageUrls) {
         List<String> mediaIds = new ArrayList<>();
         for (int index = 0; index < imageUrls.size(); index++) {
             String imageUrl = imageUrls.get(index);
@@ -55,6 +87,16 @@ public class XPublishAdapter implements XPublishPort {
             mediaIds.add(xApiClient.uploadImage(accessToken, imageBytes, fileName));
         }
         return mediaIds;
+    }
+
+    private boolean isUnauthorized(XApiException exception) {
+        String message = exception.getMessage();
+        if (!StringUtils.hasText(message)) {
+            return false;
+        }
+        return message.contains("HTTP 401")
+                || message.contains("Invalid or expired token")
+                || message.contains("Could not authenticate you");
     }
 
     private String normalizeTweetText(String text) {

@@ -18,6 +18,7 @@ info:
     |------|------|
     | `MOCK_MAP` | MockMap 리뷰 조회/답글 발행 OAuth |
     | `X` | X OAuth 2.0 PKCE · 가게별 계정 연결 |
+    | `INSTAGRAM` | Instagram Graph API 연동 (앱 `.env` 토큰 + 가게별 pseudo-OAuth 연결) |
 
     예시 경로: `/api/integrations/MOCK_MAP/oauth/start?storeId={storeId}`
 
@@ -1238,12 +1239,15 @@ components:
       enum:
         - MOCK_MAP
         - X
+        - INSTAGRAM
       x-enum-varnames:
         - MOCK_MAP
         - X
+        - INSTAGRAM
       x-enum-descriptions:
         - MockMap 리뷰 조회/답글 발행 OAuth 연동
         - X OAuth 2.0 PKCE · 가게별 계정 연결
+        - Instagram Graph API 연동 (앱 `.env` 토큰 + 가게별 pseudo-OAuth 연결)
       example: MOCK_MAP
 
     ContentChannel:
@@ -1429,10 +1433,15 @@ components:
       properties:
         title:
           type: string
+          description: 오늘 날씨 요약 (예. 비 · 18°C)
+          example: 비 · 18°C
         message:
           type: string
+          description: 날씨 기반 운영 제안 메시지
+          example: 비 오는 날엔 따뜻한 음료·디저트를 강조해 실내 방문을 유도해 보세요.
         actionLabel:
           type: string
+          example: 이 주제로 콘텐츠 만들기
 
     DashboardReviewWidget:
       type: object

@@ -104,6 +104,7 @@ public class XApiClient {
         try {
             byte[] bytes = restClient.get()
                     .uri(imageUrl)
+                    .header(HttpHeaders.ACCEPT, "image/*,*/*")
                     .retrieve()
                     .onStatus(status -> status.isError(), (request, clientResponse) -> {
                         throw new XApiException(

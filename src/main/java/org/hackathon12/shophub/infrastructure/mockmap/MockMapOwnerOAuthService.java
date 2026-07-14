@@ -1,5 +1,6 @@
 package org.hackathon12.shophub.infrastructure.mockmap;
 
+import org.hackathon12.shophub.domain.review.service.StoreReviewService;
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
 import org.hackathon12.shophub.domain.store.service.StoreMembershipService;
 import org.hackathon12.shophub.global.error.NotFoundException;
@@ -11,6 +12,7 @@ import org.hackathon12.shophub.infrastructure.persistence.UserAccountEntity;
 import org.hackathon12.shophub.infrastructure.persistence.UserAccountJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -36,6 +38,7 @@ public class MockMapOwnerOAuthService {
     private final StoreProfileJpaRepository storeProfileRepository;
     private final UserAccountJpaRepository userAccountRepository;
     private final StoreMembershipService storeMembershipService;
+    private final StoreReviewService storeReviewService;
 
     public MockMapOwnerOAuthService(
             MockMapApiClient mockMapApiClient,
@@ -47,7 +50,8 @@ public class MockMapOwnerOAuthService {
             StoreMockMapConnectionJpaRepository connectionRepository,
             StoreProfileJpaRepository storeProfileRepository,
             UserAccountJpaRepository userAccountRepository,
-            StoreMembershipService storeMembershipService
+            StoreMembershipService storeMembershipService,
+            @Lazy StoreReviewService storeReviewService
     ) {
         this.mockMapApiClient = mockMapApiClient;
         this.apiProperties = apiProperties;
@@ -59,6 +63,7 @@ public class MockMapOwnerOAuthService {
         this.storeProfileRepository = storeProfileRepository;
         this.userAccountRepository = userAccountRepository;
         this.storeMembershipService = storeMembershipService;
+        this.storeReviewService = storeReviewService;
     }
 
     @Transactional
@@ -113,8 +118,9 @@ public class MockMapOwnerOAuthService {
 
     public String buildAuthorizationUrl(UUID storeId, UUID userId) {
         requireRedirectUri();
+        requirePlatformOAuthConfigured();
         storeMembershipService.requireMembership(userId, storeId);
-        StoreMockMapConnectionEntity connection = requireStoreCredentials(storeId);
+        String clientId = resolveOAuthClientId(storeId);
 
         String state = UUID.randomUUID().toString();
         oauthStateStore.savePendingState(
@@ -128,7 +134,7 @@ public class MockMapOwnerOAuthService {
                 .fromUriString(apiProperties.baseUrl())
                 .path(resolveAuthorizePath())
                 .queryParam("response_type", "code")
-                .queryParam("client_id", connection.getClientId())
+                .queryParam("client_id", clientId)
                 .queryParam("redirect_uri", properties.redirectUri())
                 .queryParam("state", state)
                 .queryParam("scope", DEFAULT_SCOPE)
@@ -145,16 +151,26 @@ public class MockMapOwnerOAuthService {
 
         MockMapOAuthPendingState pending = validateState(state);
         storeMembershipService.requireMembership(pending.userId(), pending.storeId());
-        StoreMockMapConnectionEntity connection = requireStoreCredentials(pending.storeId());
+
+        String clientId = resolveOAuthClientId(pending.storeId());
+        String clientSecret = resolveOAuthClientSecret(pending.storeId());
 
         MockMapOAuthTokenResponse tokenResponse = mockMapApiClient.exchangeAuthorizationCode(
-                connection.getClientId(),
-                connection.getClientSecret(),
+                clientId,
+                clientSecret,
                 code,
                 properties.redirectUri(),
                 state
         );
+
+        StoreMockMapConnectionEntity connection = ensureConnection(
+                pending.storeId(),
+                pending.userId(),
+                clientId,
+                clientSecret
+        );
         persistStoreConnection(pending.storeId(), pending.userId(), connection, tokenResponse);
+        syncReviewsAfterConnect(pending.storeId());
         return getConnectionStatus(pending.storeId());
     }
 
@@ -167,7 +183,16 @@ public class MockMapOwnerOAuthService {
     public MockMapOAuthConnectionStatus getConnectionStatus(UUID storeId) {
         return connectionRepository.findByStore_Id(storeId)
                 .map(this::toConnectionStatus)
-                .orElse(emptyConnectionStatus());
+                .orElseGet(() -> isPlatformOAuthConfigured()
+                        ? new MockMapOAuthConnectionStatus(
+                                true,
+                                false,
+                                properties.clientId(),
+                                null,
+                                null,
+                                null
+                        )
+                        : emptyConnectionStatus());
     }
 
     @Transactional
@@ -193,7 +218,14 @@ public class MockMapOwnerOAuthService {
             return refreshAndCacheStoreToken(connection);
         }
 
-        return refreshLegacyGlobalToken();
+        if (isPlatformOAuthConfigured()) {
+            throw new MockMapApiException(
+                    "MockMap OAuth가 연결되지 않았습니다. "
+                            + "가게 정보에서 MAP 연동 버튼을 눌러 MockMap 계정으로 로그인해 주세요."
+            );
+        }
+
+        return refreshLegacyGlobalToken(storeId);
     }
 
     private void persistStoreConnection(
@@ -230,6 +262,16 @@ public class MockMapOwnerOAuthService {
         String oauthPlaceId = tokenResponse.place_id();
         StoreProfile current = store.toDomain();
 
+        storeProfileRepository.findByGooglePlaceId(oauthPlaceId)
+                .filter(other -> !other.getId().equals(store.getId()))
+                .ifPresent(other -> {
+                    throw new MockMapApiException(
+                            "MockMap place_id(" + oauthPlaceId + ")는 이미 다른 가게("
+                                    + other.toDomain().name() + ")에 연결되어 있습니다. "
+                                    + "가게마다 서로 다른 MockMap 계정을 연동해 주세요."
+                    );
+                });
+
         if (!StringUtils.hasText(current.googlePlaceId())) {
             store.applyDomain(new StoreProfile(
                     current.id(),
@@ -259,9 +301,12 @@ public class MockMapOwnerOAuthService {
     }
 
     private String refreshAndCacheStoreToken(StoreMockMapConnectionEntity connection) {
+        String clientId = resolveOAuthClientId(connection.getStore().getId());
+        String clientSecret = resolveOAuthClientSecret(connection.getStore().getId());
+
         MockMapOAuthTokenResponse tokenResponse = mockMapApiClient.refreshOwnerToken(
-                connection.getClientId(),
-                connection.getClientSecret(),
+                clientId,
+                clientSecret,
                 connection.getRefreshToken()
         );
 
@@ -279,7 +324,7 @@ public class MockMapOwnerOAuthService {
         return tokenResponse.access_token();
     }
 
-    private String refreshLegacyGlobalToken() {
+    private String refreshLegacyGlobalToken(UUID storeId) {
         MockMapOAuthTokenStore.StoredTokens storedTokens = legacyTokenStore.read();
         String refreshToken = storedTokens.refreshToken();
         String clientId = firstNonBlank(storedTokens.clientId(), properties.clientId());
@@ -288,8 +333,8 @@ public class MockMapOwnerOAuthService {
         if (!StringUtils.hasText(clientId) || !StringUtils.hasText(clientSecret) || !StringUtils.hasText(refreshToken)) {
             throw new MockMapApiException(
                     "MockMap OAuth가 연결되지 않았습니다. "
-                            + "PUT /api/integrations/MOCK_MAP/oauth/credentials 로 client_id/client_secret을 등록한 뒤 "
-                            + "GET /api/integrations/MOCK_MAP/oauth/start?storeId={storeId} 로 연결해 주세요."
+                            + "GET /api/integrations/MOCK_MAP/oauth/start?storeId=" + storeId
+                            + " 로 MockMap 계정을 연결해 주세요."
             );
         }
 
@@ -315,8 +360,8 @@ public class MockMapOwnerOAuthService {
         }
         try {
             mockMapApiClient.revokeToken(
-                    connection.getClientId(),
-                    connection.getClientSecret(),
+                    resolveOAuthClientId(connection.getStore().getId()),
+                    resolveOAuthClientSecret(connection.getStore().getId()),
                     connection.getRefreshToken()
             );
         } catch (MockMapApiException exception) {
@@ -329,10 +374,15 @@ public class MockMapOwnerOAuthService {
     }
 
     private MockMapOAuthConnectionStatus toConnectionStatus(StoreMockMapConnectionEntity connection) {
+        boolean credentialsConfigured = isPlatformOAuthConfigured()
+                || (StringUtils.hasText(connection.getClientId()) && StringUtils.hasText(connection.getClientSecret()));
+        String clientId = isPlatformOAuthConfigured()
+                ? properties.clientId()
+                : firstNonBlank(connection.getClientId(), properties.clientId());
         return new MockMapOAuthConnectionStatus(
-                StringUtils.hasText(connection.getClientId()) && StringUtils.hasText(connection.getClientSecret()),
+                credentialsConfigured,
                 StringUtils.hasText(connection.getRefreshToken()),
-                connection.getClientId(),
+                clientId,
                 connection.getPlaceId(),
                 connection.getPlaceName(),
                 connection.getUpdatedAt() == null ? null : connection.getUpdatedAt().toString()
@@ -344,15 +394,84 @@ public class MockMapOwnerOAuthService {
     }
 
     private StoreMockMapConnectionEntity requireStoreCredentials(UUID storeId) {
+        if (isPlatformOAuthConfigured()) {
+            throw new MockMapApiException(
+                    "Per-store MockMap credentials are not used when platform OAuth is configured."
+            );
+        }
         return connectionRepository.findByStore_Id(storeId)
                 .filter(connection -> StringUtils.hasText(connection.getClientId())
                         && StringUtils.hasText(connection.getClientSecret()))
                 .orElseThrow(() -> new MockMapApiException(
                         "MockMap OAuth credentials가 설정되지 않았습니다. "
-                                + "MockMap /owner/account/ 에서 client_id/client_secret을 확인한 뒤 "
-                                + "PUT /api/integrations/MOCK_MAP/oauth/credentials?storeId=" + storeId
-                                + " 로 등록해 주세요."
+                                + "MOCK_MAP_OAUTH_CLIENT_ID/MOCK_MAP_OAUTH_CLIENT_SECRET을 확인하거나 "
+                                + "GET /api/integrations/MOCK_MAP/oauth/start?storeId=" + storeId
+                                + " 로 연결해 주세요."
                 ));
+    }
+
+    private boolean isPlatformOAuthConfigured() {
+        return StringUtils.hasText(properties.clientId()) && StringUtils.hasText(properties.clientSecret());
+    }
+
+    private String resolveOAuthClientId(UUID storeId) {
+        if (isPlatformOAuthConfigured()) {
+            return properties.clientId();
+        }
+        return requireStoreCredentials(storeId).getClientId();
+    }
+
+    private String resolveOAuthClientSecret(UUID storeId) {
+        if (isPlatformOAuthConfigured()) {
+            return properties.clientSecret();
+        }
+        return requireStoreCredentials(storeId).getClientSecret();
+    }
+
+    private StoreMockMapConnectionEntity ensureConnection(
+            UUID storeId,
+            UUID userId,
+            String clientId,
+            String clientSecret
+    ) {
+        StoreMockMapConnectionEntity existing = connectionRepository.findByStore_Id(storeId).orElse(null);
+        if (existing != null) {
+            return existing;
+        }
+
+        StoreProfileEntity store = storeProfileRepository.findById(storeId)
+                .orElseThrow(() -> new NotFoundException("가게를 찾을 수 없습니다. storeId=" + storeId));
+        UserAccountEntity user = userAccountRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("사용자를 찾을 수 없습니다. userId=" + userId));
+
+        return connectionRepository.save(StoreMockMapConnectionEntity.of(
+                UUID.randomUUID(),
+                store,
+                user,
+                clientId,
+                clientSecret,
+                null,
+                null,
+                null,
+                Instant.now()
+        ));
+    }
+
+    private void syncReviewsAfterConnect(UUID storeId) {
+        try {
+            storeReviewService.syncMockMapReviewsAndList(storeId);
+        } catch (RuntimeException exception) {
+            log.warn("MockMap review sync after OAuth failed for storeId={}: {}", storeId, exception.getMessage());
+        }
+    }
+
+    private void requirePlatformOAuthConfigured() {
+        if (!isPlatformOAuthConfigured()) {
+            throw new MockMapApiException(
+                    "MockMap platform OAuth가 설정되지 않았습니다. "
+                            + "MOCK_MAP_OAUTH_CLIENT_ID와 MOCK_MAP_OAUTH_CLIENT_SECRET을 BE .env에 설정해 주세요."
+            );
+        }
     }
 
     private void requireCredentialValues(String clientId, String clientSecret) {

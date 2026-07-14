@@ -53,8 +53,29 @@ public class FacebookPublishService {
     }
 
     public InstagramPublishResult publishContent(UUID storeId, ContentItem content, List<String> imageUrls) {
-        StoreProfile store = storeProfileService.getStore(storeId);
+        storeProfileService.getStore(storeId);
 
+        String message = resolveMessage(storeId, content);
+        String postId = facebookPublishPort.publishPost(message, imageUrls);
+
+        return new InstagramPublishResult(
+                postId,
+                message,
+                imageUrls,
+                profileUrl(),
+                Instant.now()
+        );
+    }
+
+    private String resolveMessage(UUID storeId, ContentItem content) {
+        if (StringUtils.hasText(content.body())) {
+            if (StringUtils.hasText(content.title())) {
+                return content.title() + "\n\n" + content.body();
+            }
+            return content.body();
+        }
+
+        StoreProfile store = storeProfileService.getStore(storeId);
         InstagramCaptionPrompt prompt = new InstagramCaptionPrompt(
                 store.name(),
                 store.category(),
@@ -65,16 +86,7 @@ public class FacebookPublishService {
                 content.body()
         );
         AiGeneratedText suggestion = aiTextGenerationService.suggestInstagramCaption(prompt);
-        String message = suggestion.text();
-        String postId = facebookPublishPort.publishPost(message, imageUrls);
-
-        return new InstagramPublishResult(
-                postId,
-                message,
-                imageUrls,
-                profileUrl(),
-                Instant.now()
-        );
+        return suggestion.text();
     }
 
     private String profileUrl() {

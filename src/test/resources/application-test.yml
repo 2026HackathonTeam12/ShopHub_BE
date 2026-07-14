@@ -28,6 +28,9 @@ app:
 
 mock-map:
   oauth:
+    client-id: oci_shophub_local
+    client-secret: ocs_shophub_local_dev_secret
+    redirect-uri: http://localhost:8080/api/integrations/MOCK_MAP/oauth/callback
     cache:
       store: memory
 

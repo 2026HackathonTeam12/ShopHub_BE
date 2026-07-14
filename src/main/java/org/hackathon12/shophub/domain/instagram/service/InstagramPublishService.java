@@ -13,6 +13,7 @@ import org.hackathon12.shophub.domain.store.model.BusinessHour;
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
 import org.hackathon12.shophub.domain.store.service.StoreProfileService;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -58,6 +59,25 @@ public class InstagramPublishService {
 
     public InstagramPublishResult publishContent(UUID storeId, ContentItem content, List<String> imageUrls) {
         StoreProfile store = storeProfileService.getStore(storeId);
+        String caption = resolveCaption(storeId, store, content);
+        String mediaId = instagramPublishPort.publishPost(caption, imageUrls);
+
+        return new InstagramPublishResult(
+                mediaId,
+                caption,
+                imageUrls,
+                "https://www.instagram.com/commentcopybot/",
+                Instant.now()
+        );
+    }
+
+    private String resolveCaption(UUID storeId, StoreProfile store, ContentItem content) {
+        if (StringUtils.hasText(content.body())) {
+            if (StringUtils.hasText(content.title())) {
+                return content.title() + "\n\n" + content.body();
+            }
+            return content.body();
+        }
 
         InstagramCaptionPrompt prompt = new InstagramCaptionPrompt(
                 store.name(),
@@ -69,16 +89,7 @@ public class InstagramPublishService {
                 content.body()
         );
         AiGeneratedText suggestion = aiTextGenerationService.suggestInstagramCaption(prompt);
-        String caption = suggestion.text();
-        String mediaId = instagramPublishPort.publishPost(caption, imageUrls);
-
-        return new InstagramPublishResult(
-                mediaId,
-                caption,
-                imageUrls,
-                "https://www.instagram.com/commentcopybot/",
-                Instant.now()
-        );
+        return suggestion.text();
     }
 
     private ContentItem selectBaseContent(UUID storeId) {

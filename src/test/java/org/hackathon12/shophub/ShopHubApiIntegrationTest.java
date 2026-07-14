@@ -1004,7 +1004,18 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void oauth_credentials_lifecycle_works_without_external_server() throws Exception {
+    void oauth_platform_status_available_without_store_credentials() throws Exception {
+        String isolatedStoreId = createIsolatedStore();
+
+        mockMvc.perform(authed(get("/api/integrations/oauth/status").param("storeId", isolatedStoreId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.type=='MOCK_MAP')].credentialsConfigured").value(true))
+                .andExpect(jsonPath("$[?(@.type=='MOCK_MAP')].connected").value(false))
+                .andExpect(jsonPath("$[?(@.type=='MOCK_MAP')].clientId").value("oci_shophub_local"));
+    }
+
+    @Test
+    void oauth_credentials_lifecycle_clears_store_connection_but_keeps_platform_config() throws Exception {
         String request = objectMapper.writeValueAsString(Map.of(
                 "clientId", "mock-client-" + UUID.randomUUID(),
                 "clientSecret", "mock-secret-" + UUID.randomUUID()
@@ -1019,23 +1030,18 @@ class ShopHubApiIntegrationTest {
                 .andExpect(jsonPath("$.credentialsConfigured").value(true))
                 .andExpect(jsonPath("$.connected").value(false));
 
-        mockMvc.perform(authed(get("/api/integrations/oauth/status").param("storeId", STORE_ID)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].type").value("MOCK_MAP"))
-                .andExpect(jsonPath("$[0].credentialsConfigured").value(true));
-
         mockMvc.perform(authed(post("/api/integrations/MOCK_MAP/oauth/disconnect").param("storeId", STORE_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.connected").value(false));
 
         mockMvc.perform(authed(delete("/api/integrations/MOCK_MAP/oauth/credentials").param("storeId", STORE_ID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.credentialsConfigured").value(false));
+                .andExpect(jsonPath("$.credentialsConfigured").value(true));
 
         mockMvc.perform(authed(get("/api/integrations/oauth/status").param("storeId", STORE_ID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[?(@.type=='MOCK_MAP')]").isEmpty());
+                .andExpect(jsonPath("$[?(@.type=='MOCK_MAP')].credentialsConfigured").value(true))
+                .andExpect(jsonPath("$[?(@.type=='MOCK_MAP')].connected").value(false));
     }
 
     @Test
@@ -1073,12 +1079,17 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void oauth_authorize_url_requires_credentials() throws Exception {
+    void oauth_authorize_url_works_with_platform_client() throws Exception {
         String isolatedStoreId = createIsolatedStore();
 
         mockMvc.perform(authed(get("/api/integrations/MOCK_MAP/oauth/authorize-url").param("storeId", isolatedStoreId)))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.code").value("MOCK_MAP_API_ERROR"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authorizationUrl").value(org.hamcrest.Matchers.containsString(
+                        "/oauth/authorize/"
+                )))
+                .andExpect(jsonPath("$.authorizationUrl").value(org.hamcrest.Matchers.containsString(
+                        "client_id=oci_shophub_local"
+                )));
     }
 
     @Test
@@ -1103,12 +1114,13 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void oauth_start_without_credentials_returns_bad_gateway() throws Exception {
+    void oauth_start_redirects_with_platform_client() throws Exception {
         String isolatedStoreId = createIsolatedStore();
 
         mockMvc.perform(authed(get("/api/integrations/MOCK_MAP/oauth/start").param("storeId", isolatedStoreId)))
-                .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.code").value("MOCK_MAP_API_ERROR"));
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("/oauth/authorize/")))
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("client_id=oci_shophub_local")));
     }
 
     @Test

@@ -3,6 +3,7 @@ package org.hackathon12.shophub.global.error;
 import org.hackathon12.shophub.infrastructure.ai.openai.OpenAiApiException;
 import org.hackathon12.shophub.infrastructure.facebook.FacebookGraphApiException;
 import org.hackathon12.shophub.infrastructure.instagram.InstagramGraphApiException;
+import org.hackathon12.shophub.infrastructure.instagram.oauth.InstagramOAuthException;
 import org.hackathon12.shophub.infrastructure.mockmap.MockMapApiException;
 import org.hackathon12.shophub.infrastructure.x.XApiException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -30,6 +31,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InstagramGraphApiException.class)
     public ApiErrorResponse handleInstagramGraphApiException(InstagramGraphApiException exception) {
         return new ApiErrorResponse("INSTAGRAM_GRAPH_API_ERROR", exception.getMessage(), Instant.now());
+    }
+
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(InstagramOAuthException.class)
+    public ApiErrorResponse handleInstagramOAuthException(InstagramOAuthException exception) {
+        return new ApiErrorResponse("INVALID_REQUEST", exception.getMessage(), Instant.now());
     }
 
     @ResponseStatus(HttpStatus.BAD_GATEWAY)

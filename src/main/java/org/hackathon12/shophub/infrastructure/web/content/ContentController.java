@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -77,10 +78,8 @@ public class ContentController {
                 ? List.of(ContentChannel.INSTAGRAM.name())
                 : requestBody.channels();
         ContentItem created = contentService.createContent(storeId, requestBody.title(), requestBody.body(), channels);
-
-        if (requestBody.img_urls() != null && !requestBody.img_urls().isEmpty()) {
-            created = contentChannelPublishService.publishToChannels(storeId, created, requestBody.img_urls());
-        }
+        List<String> imgUrls = requestBody.img_urls() == null ? List.of() : requestBody.img_urls();
+        created = contentChannelPublishService.publishToChannels(storeId, created, imgUrls);
 
         return ResponseEntity.status(201).body(created);
     }
@@ -120,7 +119,7 @@ public class ContentController {
             String title,
             String body,
             List<String> channels,
-            @JsonProperty("img_urls") List<String> img_urls
+            @JsonProperty("img_urls") @JsonAlias("imageUrls") List<String> img_urls
     ) {
     }
 

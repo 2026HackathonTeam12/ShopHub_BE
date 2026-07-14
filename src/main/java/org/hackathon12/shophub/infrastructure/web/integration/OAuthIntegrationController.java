@@ -5,6 +5,8 @@ import org.hackathon12.shophub.domain.integration.model.OAuthIntegrationType;
 import org.hackathon12.shophub.domain.integration.port.OAuthIntegrationProvider;
 import org.hackathon12.shophub.domain.integration.service.OAuthIntegrationService;
 import org.hackathon12.shophub.global.config.FrontendProperties;
+import org.hackathon12.shophub.infrastructure.facebook.oauth.FacebookOAuthException;
+import org.hackathon12.shophub.infrastructure.instagram.oauth.InstagramOAuthException;
 import org.hackathon12.shophub.infrastructure.mockmap.MockMapApiException;
 import org.hackathon12.shophub.infrastructure.x.XApiException;
 import org.hackathon12.shophub.infrastructure.web.auth.ShopHubAuthGuard;
@@ -125,6 +127,10 @@ public class OAuthIntegrationController {
             String message = status.placeName() + " (" + status.placeId() + ") 연동이 완료되었습니다.";
             return redirectToFrontend(integrationType.pathValue(), true, message);
         } catch (MockMapApiException exception) {
+            return redirectToFrontend(integrationType.pathValue(), false, exception.getMessage());
+        } catch (InstagramOAuthException exception) {
+            return redirectToFrontend(integrationType.pathValue(), false, exception.getMessage());
+        } catch (FacebookOAuthException exception) {
             return redirectToFrontend(integrationType.pathValue(), false, exception.getMessage());
         } catch (XApiException exception) {
             return redirectToFrontend(integrationType.pathValue(), false, exception.getMessage());

@@ -1,7 +1,5 @@
 package org.hackathon12.shophub.domain.review.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
 import java.time.Instant;
 import java.util.UUID;
 
@@ -9,7 +7,6 @@ public record StoreReview(
         UUID id,
         UUID storeId,
         String platform,
-        @JsonIgnore
         String sourceReviewId,
         String authorName,
         int rating,

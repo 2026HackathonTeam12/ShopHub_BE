@@ -45,6 +45,13 @@ mock-map:
       pending-state-key-prefix: ${MOCK_MAP_OAUTH_PENDING_STATE_KEY_PREFIX:shophub:mockmap:oauth:pending-state:}
       access-token-key-prefix: ${MOCK_MAP_OAUTH_ACCESS_TOKEN_KEY_PREFIX:shophub:mockmap:oauth:access-token:}
 
+open-meteo:
+  geocoding-base-url: ${OPEN_METEO_GEOCODING_BASE_URL:https://geocoding-api.open-meteo.com}
+  forecast-base-url: ${OPEN_METEO_FORECAST_BASE_URL:https://api.open-meteo.com}
+  default-latitude: ${OPEN_METEO_DEFAULT_LATITUDE:37.5665}
+  default-longitude: ${OPEN_METEO_DEFAULT_LONGITUDE:126.9780}
+  timezone: ${OPEN_METEO_TIMEZONE:Asia/Seoul}
+
 openai:
   api-key: ${OPENAI_API_KEY:}
   base-url: ${OPENAI_BASE_URL:https://api.openai.com}
@@ -74,6 +81,9 @@ instagram:
     allowed-username: ${INSTAGRAM_GRAPH_ALLOWED_USERNAME:commentcopybot}
     max-attempts: ${INSTAGRAM_GRAPH_MAX_ATTEMPTS:15}
     interval-ms: ${INSTAGRAM_GRAPH_INTERVAL_MS:2000}
+  oauth:
+    redirect-uri: ${INSTAGRAM_OAUTH_REDIRECT_URI:http://localhost:8080/api/integrations/INSTAGRAM/oauth/callback}
+    pending-state-ttl-seconds: ${INSTAGRAM_OAUTH_PENDING_STATE_TTL_SECONDS:600}
 
 x:
   api:
@@ -100,6 +110,9 @@ facebook:
     access-token: ${FACEBOOK_GRAPH_ACCESS_TOKEN:}
     allowed-page-id: ${FACEBOOK_GRAPH_ALLOWED_PAGE_ID:}
     allowed-page-name: ${FACEBOOK_GRAPH_ALLOWED_PAGE_NAME:}
+  oauth:
+    redirect-uri: ${FACEBOOK_OAUTH_REDIRECT_URI:http://localhost:8080/api/integrations/FACEBOOK/oauth/callback}
+    pending-state-ttl-seconds: ${FACEBOOK_OAUTH_PENDING_STATE_TTL_SECONDS:600}
 
 app:
   frontend:

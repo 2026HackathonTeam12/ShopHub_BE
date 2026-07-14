@@ -153,6 +153,10 @@ public class XOwnerOAuthService {
                 .orElseGet(() -> refreshAccessToken(storeId));
     }
 
+    public synchronized void invalidateAccessToken(UUID storeId) {
+        oauthStateStore.deleteAccessToken(storeId);
+    }
+
     @Transactional(readOnly = true)
     public XOAuthConnectionStatus getConnectionStatus(UUID storeId) {
         boolean credentialsConfigured = isAppCredentialsConfigured();
