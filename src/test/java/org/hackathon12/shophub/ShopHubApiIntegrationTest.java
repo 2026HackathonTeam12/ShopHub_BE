@@ -183,6 +183,22 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
+    void get_current_user_returns_profile() throws Exception {
+        mockMvc.perform(authed(get("/v1/auth/me")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("name@business.kr"))
+                .andExpect(jsonPath("$.name").isNotEmpty())
+                .andExpect(jsonPath("$.id").isNotEmpty());
+    }
+
+    @Test
+    void get_current_user_without_auth_returns_401() throws Exception {
+        mockMvc.perform(get("/v1/auth/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
     void login_with_invalid_credentials_returns_401() throws Exception {
         Map<String, Object> request = Map.of(
                 "email", "name@business.kr",

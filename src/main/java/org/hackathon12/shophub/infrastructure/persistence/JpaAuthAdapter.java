@@ -4,6 +4,8 @@ import org.hackathon12.shophub.domain.auth.model.UserAccount;
 import org.hackathon12.shophub.domain.auth.port.AuthPort;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 @Component
 public class JpaAuthAdapter implements AuthPort {
 
@@ -16,6 +18,13 @@ public class JpaAuthAdapter implements AuthPort {
     @Override
     public UserAccount findByEmail(String email) {
         return userAccountJpaRepository.findByEmail(email)
+                .map(UserAccountEntity::toDomain)
+                .orElse(null);
+    }
+
+    @Override
+    public UserAccount findById(UUID userId) {
+        return userAccountJpaRepository.findById(userId)
                 .map(UserAccountEntity::toDomain)
                 .orElse(null);
     }

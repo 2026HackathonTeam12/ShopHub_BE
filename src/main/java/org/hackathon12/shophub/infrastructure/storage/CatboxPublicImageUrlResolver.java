@@ -1,5 +1,6 @@
 package org.hackathon12.shophub.infrastructure.storage;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -12,22 +13,23 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 
 @Component
-public class CatboxPublicImageUploader implements PublicImageUploadPort {
+@ConditionalOnProperty(prefix = "app.storage", name = "public-image-provider", havingValue = "catbox", matchIfMissing = true)
+public class CatboxPublicImageUrlResolver implements PublicImageUrlResolver {
 
     private static final String UPLOAD_URL = "https://catbox.moe/user/api.php";
 
     private final RestClient restClient;
 
-    public CatboxPublicImageUploader(RestClient.Builder restClientBuilder) {
+    public CatboxPublicImageUrlResolver(RestClient.Builder restClientBuilder) {
         this.restClient = restClientBuilder.build();
     }
 
     @Override
-    public String upload(MultipartFile image) {
+    public String resolve(MultipartFile image, String savedFileName, int index) {
         try {
             String filename = StringUtils.hasText(image.getOriginalFilename())
                     ? image.getOriginalFilename()
-                    : "instagram.jpg";
+                    : savedFileName;
 
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             body.add("reqtype", "fileupload");

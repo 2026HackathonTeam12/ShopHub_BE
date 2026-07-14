@@ -16,14 +16,14 @@ import java.util.UUID;
 public class LocalImageStorageService {
 
     private final StorageProperties storageProperties;
-    private final PublicImageUploadPort publicImageUploadPort;
+    private final PublicImageUrlResolver publicImageUrlResolver;
 
     public LocalImageStorageService(
             StorageProperties storageProperties,
-            PublicImageUploadPort publicImageUploadPort
+            PublicImageUrlResolver publicImageUrlResolver
     ) {
         this.storageProperties = storageProperties;
-        this.publicImageUploadPort = publicImageUploadPort;
+        this.publicImageUrlResolver = publicImageUrlResolver;
     }
 
     public List<String> saveInstagramImages(List<MultipartFile> images) {
@@ -42,16 +42,17 @@ public class LocalImageStorageService {
         }
 
         List<String> imageUrls = new ArrayList<>();
-        for (MultipartFile image : images) {
+        for (int index = 0; index < images.size(); index++) {
+            MultipartFile image = images.get(index);
             validateImage(image);
-            saveLocalCopy(image, instagramDir);
-            imageUrls.add(publicImageUploadPort.upload(image));
+            String savedFileName = saveLocalCopy(image, instagramDir);
+            imageUrls.add(publicImageUrlResolver.resolve(image, savedFileName, index));
         }
 
         return imageUrls;
     }
 
-    private void saveLocalCopy(MultipartFile image, Path instagramDir) {
+    private String saveLocalCopy(MultipartFile image, Path instagramDir) {
         String extension = extractExtension(image.getOriginalFilename());
         String fileName = UUID.randomUUID() + extension;
         Path destination = instagramDir.resolve(fileName);
@@ -60,6 +61,7 @@ public class LocalImageStorageService {
         } catch (IOException exception) {
             throw new IllegalArgumentException("이미지 저장에 실패했습니다: " + image.getOriginalFilename());
         }
+        return fileName;
     }
 
     public String fileStorageLocation() {

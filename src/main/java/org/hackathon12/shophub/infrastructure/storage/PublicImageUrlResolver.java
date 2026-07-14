@@ -2,7 +2,7 @@ package org.hackathon12.shophub.infrastructure.storage;
 
 import org.springframework.web.multipart.MultipartFile;
 
-public interface PublicImageUploadPort {
+public interface PublicImageUrlResolver {
 
-    String upload(MultipartFile image);
+    String resolve(MultipartFile image, String savedFileName, int index);
 }

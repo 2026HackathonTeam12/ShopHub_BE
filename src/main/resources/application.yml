@@ -71,3 +71,4 @@ app:
   storage:
     upload-dir: ${APP_STORAGE_UPLOAD_DIR:./uploads}
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+    public-image-provider: ${APP_STORAGE_PUBLIC_IMAGE_PROVIDER:picsum-dev}

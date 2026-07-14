@@ -1,10 +1,15 @@
 package org.hackathon12.shophub.infrastructure.web.auth;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.hackathon12.shophub.domain.auth.model.UserAccount;
 import org.hackathon12.shophub.domain.auth.service.AuthService;
 import org.hackathon12.shophub.domain.auth.service.AuthSessionService;
 import org.hackathon12.shophub.global.config.AuthSessionProperties;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,15 +27,18 @@ public class AuthController {
     private final AuthService authService;
     private final AuthSessionService authSessionService;
     private final AuthSessionProperties authSessionProperties;
+    private final ShopHubAuthGuard shopHubAuthGuard;
 
     public AuthController(
             AuthService authService,
             AuthSessionService authSessionService,
-            AuthSessionProperties authSessionProperties
+            AuthSessionProperties authSessionProperties,
+            ShopHubAuthGuard shopHubAuthGuard
     ) {
         this.authService = authService;
         this.authSessionService = authSessionService;
         this.authSessionProperties = authSessionProperties;
+        this.shopHubAuthGuard = shopHubAuthGuard;
     }
 
     @PostMapping("/signup")
@@ -44,6 +52,22 @@ public class AuthController {
     public AuthResponse login(@RequestBody LoginRequest request) {
         UserAccount account = authService.login(request.email(), request.password());
         return toResponse(account);
+    }
+
+    @GetMapping("/me")
+    @Operation(
+            summary = "현재 사용자 조회",
+            description = "Bearer 토큰으로 인증된 사용자의 프로필을 반환합니다.",
+            security = @SecurityRequirement(name = "BearerAuth")
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "401", description = "인증 필요")
+    })
+    public UserProfile me(HttpServletRequest request) {
+        UUID userId = shopHubAuthGuard.requireUserId(request);
+        UserAccount account = authService.getAccount(userId);
+        return new UserProfile(account.id(), account.email(), account.name());
     }
 
     @PostMapping("/logout")
