@@ -76,7 +76,7 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                         new MenuItem(UUID.fromString("5944f95a-b4f5-4de6-84f2-74c2e90d1ef2"), "모모 라떼", "버터 취향시에"),
                         new MenuItem(UUID.fromString("43057841-6f42-48d9-b6e7-6b215f4de4f7"), "디카페인 플랫화이트", "AI 불향")
                 ),
-                "ChIJN1t_tDeuEmsRUsoyG83frY4",
+                null,
                 "https://maps.google.com",
                 128,
                 Instant.now()

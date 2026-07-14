@@ -20,6 +20,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -209,7 +211,44 @@ public class MockMapOwnerOAuthService {
             );
             oauthStateStore.deleteAccessToken(storeId);
         }
+
+        storeProfileRepository.findById(storeId).ifPresent(store -> {
+            StoreProfile current = store.toDomain();
+            store.applyDomain(new StoreProfile(
+                    current.id(),
+                    current.name(),
+                    current.phone(),
+                    current.introduction(),
+                    current.address(),
+                    current.category(),
+                    current.toneOfVoice(),
+                    current.businessHours(),
+                    current.menuItems(),
+                    null,
+                    current.googleReviewUrl(),
+                    0,
+                    Instant.now()
+            ));
+        });
+        storeReviewService.clearSyncedReviews(storeId);
+
         return getConnectionStatus(storeId);
+    }
+
+    public Optional<String> findConnectedPlaceId(UUID storeId) {
+        return connectionRepository.findByStore_Id(storeId)
+                .filter(connection -> StringUtils.hasText(connection.getRefreshToken()))
+                .filter(connection -> StringUtils.hasText(connection.getPlaceId()))
+                .map(StoreMockMapConnectionEntity::getPlaceId);
+    }
+
+    public List<UUID> findConnectedStoreIds() {
+        return connectionRepository.findAll().stream()
+                .filter(connection -> StringUtils.hasText(connection.getRefreshToken()))
+                .filter(connection -> StringUtils.hasText(connection.getPlaceId()))
+                .map(connection -> connection.getStore().getId())
+                .distinct()
+                .toList();
     }
 
     private String refreshAccessToken(UUID storeId) {

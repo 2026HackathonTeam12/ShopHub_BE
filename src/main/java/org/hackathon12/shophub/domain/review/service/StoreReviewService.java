@@ -12,8 +12,10 @@ import org.hackathon12.shophub.domain.review.port.StoreReviewPort;
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
 import org.hackathon12.shophub.domain.store.service.StoreProfileService;
 import org.hackathon12.shophub.global.error.NotFoundException;
+import org.hackathon12.shophub.infrastructure.mockmap.MockMapOwnerOAuthService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -34,19 +36,22 @@ public class StoreReviewService {
     private final ReviewInboxService reviewInboxService;
     private final StoreProfileService storeProfileService;
     private final AiTextGenerationService aiTextGenerationService;
+    private final MockMapOwnerOAuthService mockMapOwnerOAuthService;
 
     public StoreReviewService(
             StoreReviewPort storeReviewPort,
             ReviewReplyPublisherPort reviewReplyPublisherPort,
             ReviewInboxService reviewInboxService,
             StoreProfileService storeProfileService,
-            AiTextGenerationService aiTextGenerationService
+            AiTextGenerationService aiTextGenerationService,
+            @Lazy MockMapOwnerOAuthService mockMapOwnerOAuthService
     ) {
         this.storeReviewPort = storeReviewPort;
         this.reviewReplyPublisherPort = reviewReplyPublisherPort;
         this.reviewInboxService = reviewInboxService;
         this.storeProfileService = storeProfileService;
         this.aiTextGenerationService = aiTextGenerationService;
+        this.mockMapOwnerOAuthService = mockMapOwnerOAuthService;
     }
 
     public List<StoreReview> getReviews(UUID storeId, String keyword) {
@@ -94,7 +99,7 @@ public class StoreReviewService {
     }
 
     public MockMapReviewSyncResult syncMockMapReviews(UUID storeId) {
-        if (!StringUtils.hasText(storeProfileService.getStore(storeId).googlePlaceId())) {
+        if (mockMapOwnerOAuthService.findConnectedPlaceId(storeId).isEmpty()) {
             return MockMapReviewSyncResult.skipped();
         }
 
@@ -112,13 +117,19 @@ public class StoreReviewService {
         }
     }
 
-    private StoreReviewPort.MergeResult pullMockMapReviews(UUID storeId) {
-        StoreProfile storeProfile = storeProfileService.getStore(storeId);
-        if (!StringUtils.hasText(storeProfile.googlePlaceId())) {
-            throw new IllegalArgumentException("MockMap place_id가 등록되지 않았습니다.");
-        }
+    @Transactional
+    public void clearSyncedReviews(UUID storeId) {
+        storeReviewPort.replaceByStoreId(storeId, List.of());
+    }
 
-        ReviewInbox reviewInbox = reviewInboxService.getUnifiedInbox(List.of(storeProfile.googlePlaceId()));
+    private StoreReviewPort.MergeResult pullMockMapReviews(UUID storeId) {
+        storeProfileService.getStore(storeId);
+        String placeId = mockMapOwnerOAuthService.findConnectedPlaceId(storeId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "MockMap OAuth가 연결되지 않았습니다. 가게 정보에서 MAP을 연동해 주세요."
+                ));
+
+        ReviewInbox reviewInbox = reviewInboxService.getUnifiedInbox(List.of(placeId));
         List<StoreReview> incoming = reviewInbox.reviews().stream()
                 .map(review -> new StoreReview(
                         UUID.randomUUID(),
@@ -140,16 +151,14 @@ public class StoreReviewService {
     }
 
     public MockMapReviewSyncResult syncAllMockMapReviews() {
-        List<StoreProfile> stores = storeProfileService.getStores().stream()
-                .filter(store -> StringUtils.hasText(store.googlePlaceId()))
-                .toList();
+        List<UUID> connectedStoreIds = mockMapOwnerOAuthService.findConnectedStoreIds();
 
         int storesProcessed = 0;
         int newReviews = 0;
         int updatedReviews = 0;
 
-        for (StoreProfile store : stores) {
-            MockMapReviewSyncResult result = syncMockMapReviews(store.id());
+        for (UUID storeId : connectedStoreIds) {
+            MockMapReviewSyncResult result = syncMockMapReviews(storeId);
             if (result.error() != null) {
                 continue;
             }

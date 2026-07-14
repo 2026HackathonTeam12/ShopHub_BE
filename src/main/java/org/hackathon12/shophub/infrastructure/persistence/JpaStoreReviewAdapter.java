@@ -6,7 +6,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -48,23 +50,23 @@ public class JpaStoreReviewAdapter implements StoreReviewPort {
     @Override
     @Transactional
     public MergeResult mergeFromSource(UUID storeId, List<StoreReview> reviews) {
-        if (reviews == null || reviews.isEmpty()) {
-            return new MergeResult(0, 0);
-        }
+        List<StoreReview> incoming = reviews == null ? List.of() : reviews;
+        Set<String> incomingSourceIds = new HashSet<>();
 
         int newReviews = 0;
         int updatedReviews = 0;
-        for (StoreReview incoming : reviews) {
-            if (!StringUtils.hasText(incoming.sourceReviewId())) {
+        for (StoreReview review : incoming) {
+            if (!StringUtils.hasText(review.sourceReviewId())) {
                 continue;
             }
+            incomingSourceIds.add(review.sourceReviewId());
 
             StoreReviewEntity existing = storeReviewJpaRepository
-                    .findByStore_IdAndSourceReviewId(storeId, incoming.sourceReviewId())
+                    .findByStore_IdAndSourceReviewId(storeId, review.sourceReviewId())
                     .orElse(null);
 
             if (existing == null) {
-                storeReviewJpaRepository.save(StoreReviewEntity.fromDomain(incoming));
+                storeReviewJpaRepository.save(StoreReviewEntity.fromDomain(review));
                 newReviews++;
                 continue;
             }
@@ -73,16 +75,24 @@ public class JpaStoreReviewAdapter implements StoreReviewPort {
             storeReviewJpaRepository.save(StoreReviewEntity.fromDomain(new StoreReview(
                     current.id(),
                     current.storeId(),
-                    incoming.platform(),
-                    incoming.sourceReviewId(),
-                    incoming.authorName(),
-                    incoming.rating(),
-                    incoming.content(),
-                    incoming.reviewedAt(),
+                    review.platform(),
+                    review.sourceReviewId(),
+                    review.authorName(),
+                    review.rating(),
+                    review.content(),
+                    review.reviewedAt(),
                     current.reply(),
                     current.repliedAt()
             )));
             updatedReviews++;
+        }
+
+        // Drop reviews that no longer belong to this store's current place.
+        for (StoreReviewEntity existing : storeReviewJpaRepository.findByStore_Id(storeId)) {
+            String sourceReviewId = existing.toDomain().sourceReviewId();
+            if (!StringUtils.hasText(sourceReviewId) || !incomingSourceIds.contains(sourceReviewId)) {
+                storeReviewJpaRepository.delete(existing);
+            }
         }
 
         return new MergeResult(newReviews, updatedReviews);

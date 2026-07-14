@@ -190,6 +190,26 @@ public class StoreProfileService {
         return storeProfilePort.save(updated);
     }
 
+    public StoreProfile clearGooglePlaceBinding(UUID storeId) {
+        StoreProfile current = getStore(storeId);
+        StoreProfile updated = new StoreProfile(
+                current.id(),
+                current.name(),
+                current.phone(),
+                current.introduction(),
+                current.address(),
+                current.category(),
+                current.toneOfVoice(),
+                current.businessHours(),
+                current.menuItems(),
+                null,
+                current.googleReviewUrl(),
+                0,
+                Instant.now()
+        );
+        return storeProfilePort.save(updated);
+    }
+
     private List<BusinessHour> normalizeBusinessHours(List<BusinessHour> businessHours) {
         if (businessHours == null || businessHours.isEmpty()) {
             return List.of(
