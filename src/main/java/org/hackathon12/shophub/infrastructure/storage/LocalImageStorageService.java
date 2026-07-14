@@ -16,9 +16,14 @@ import java.util.UUID;
 public class LocalImageStorageService {
 
     private final StorageProperties storageProperties;
+    private final PublicImageUploadPort publicImageUploadPort;
 
-    public LocalImageStorageService(StorageProperties storageProperties) {
+    public LocalImageStorageService(
+            StorageProperties storageProperties,
+            PublicImageUploadPort publicImageUploadPort
+    ) {
         this.storageProperties = storageProperties;
+        this.publicImageUploadPort = publicImageUploadPort;
     }
 
     public List<String> saveInstagramImages(List<MultipartFile> images) {
@@ -39,22 +44,22 @@ public class LocalImageStorageService {
         List<String> imageUrls = new ArrayList<>();
         for (MultipartFile image : images) {
             validateImage(image);
-            String extension = extractExtension(image.getOriginalFilename());
-            String fileName = UUID.randomUUID() + extension;
-            Path destination = instagramDir.resolve(fileName);
-            try {
-                Files.copy(image.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException exception) {
-                throw new IllegalArgumentException("이미지 저장에 실패했습니다: " + image.getOriginalFilename());
-            }
-
-            String publicBaseUrl = storageProperties.publicBaseUrl().endsWith("/")
-                    ? storageProperties.publicBaseUrl().substring(0, storageProperties.publicBaseUrl().length() - 1)
-                    : storageProperties.publicBaseUrl();
-            imageUrls.add(publicBaseUrl + "/uploads/instagram/" + fileName);
+            saveLocalCopy(image, instagramDir);
+            imageUrls.add(publicImageUploadPort.upload(image));
         }
 
         return imageUrls;
+    }
+
+    private void saveLocalCopy(MultipartFile image, Path instagramDir) {
+        String extension = extractExtension(image.getOriginalFilename());
+        String fileName = UUID.randomUUID() + extension;
+        Path destination = instagramDir.resolve(fileName);
+        try {
+            Files.copy(image.getInputStream(), destination, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("이미지 저장에 실패했습니다: " + image.getOriginalFilename());
+        }
     }
 
     public String fileStorageLocation() {

@@ -36,6 +36,7 @@ public class ContentService {
     }
 
     public List<ContentItem> getContents(UUID storeId, ContentStatus status) {
+        storeProfileService.getStore(storeId);
         List<ContentItem> items = contentPort.findByStoreId(storeId);
         if (status == null) {
             return items;
@@ -46,6 +47,7 @@ public class ContentService {
     }
 
     public ContentItem createContent(UUID storeId, String title, String body, List<String> channels) {
+        storeProfileService.getStore(storeId);
         ContentItem contentItem = new ContentItem(
                 UUID.randomUUID(),
                 storeId,
@@ -69,7 +71,7 @@ public class ContentService {
                 toMenuSummary(storeProfile),
                 StringUtils.hasText(eventText) ? eventText.trim() : "진행 중인 이벤트 정보 없음"
         );
-        return aiTextGenerationService.generateContentSuggestion(prompt);
+        return aiTextGenerationService.suggestContent(prompt);
     }
 
     public ContentItem retryContent(UUID storeId, UUID contentId) {

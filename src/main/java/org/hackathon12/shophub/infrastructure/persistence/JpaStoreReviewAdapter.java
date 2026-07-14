@@ -4,6 +4,7 @@ import org.hackathon12.shophub.domain.review.model.StoreReview;
 import org.hackathon12.shophub.domain.review.port.StoreReviewPort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.UUID;
@@ -42,6 +43,49 @@ public class JpaStoreReviewAdapter implements StoreReviewPort {
                 .map(StoreReviewEntity::fromDomain)
                 .toList();
         storeReviewJpaRepository.saveAll(entities);
+    }
+
+    @Override
+    @Transactional
+    public MergeResult mergeFromSource(UUID storeId, List<StoreReview> reviews) {
+        if (reviews == null || reviews.isEmpty()) {
+            return new MergeResult(0, 0);
+        }
+
+        int newReviews = 0;
+        int updatedReviews = 0;
+        for (StoreReview incoming : reviews) {
+            if (!StringUtils.hasText(incoming.sourceReviewId())) {
+                continue;
+            }
+
+            StoreReviewEntity existing = storeReviewJpaRepository
+                    .findByStore_IdAndSourceReviewId(storeId, incoming.sourceReviewId())
+                    .orElse(null);
+
+            if (existing == null) {
+                storeReviewJpaRepository.save(StoreReviewEntity.fromDomain(incoming));
+                newReviews++;
+                continue;
+            }
+
+            StoreReview current = existing.toDomain();
+            storeReviewJpaRepository.save(StoreReviewEntity.fromDomain(new StoreReview(
+                    current.id(),
+                    current.storeId(),
+                    incoming.platform(),
+                    incoming.sourceReviewId(),
+                    incoming.authorName(),
+                    incoming.rating(),
+                    incoming.content(),
+                    incoming.reviewedAt(),
+                    current.reply(),
+                    current.repliedAt()
+            )));
+            updatedReviews++;
+        }
+
+        return new MergeResult(newReviews, updatedReviews);
     }
 
     @Override

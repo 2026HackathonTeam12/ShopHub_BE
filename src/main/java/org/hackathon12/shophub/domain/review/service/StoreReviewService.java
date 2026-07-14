@@ -1,15 +1,20 @@
 package org.hackathon12.shophub.domain.review.service;
 
+import org.hackathon12.shophub.domain.ai.model.AiGeneratedText;
 import org.hackathon12.shophub.domain.ai.model.ReviewReplyPrompt;
 import org.hackathon12.shophub.domain.ai.service.AiTextGenerationService;
 import org.hackathon12.shophub.domain.review.model.ReviewInbox;
 import org.hackathon12.shophub.domain.review.model.StoreReview;
 import org.hackathon12.shophub.domain.review.model.StoreReviewSummary;
+import org.hackathon12.shophub.domain.review.port.ReviewReplyPublisherPort;
 import org.hackathon12.shophub.domain.review.port.StoreReviewPort;
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
 import org.hackathon12.shophub.domain.store.service.StoreProfileService;
 import org.hackathon12.shophub.global.error.NotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.Comparator;
@@ -19,24 +24,31 @@ import java.util.UUID;
 @Service
 public class StoreReviewService {
 
+    private static final Logger log = LoggerFactory.getLogger(StoreReviewService.class);
+    private static final String MOCK_MAP_PLATFORM = "MOCK_MAP";
+
     private final StoreReviewPort storeReviewPort;
+    private final ReviewReplyPublisherPort reviewReplyPublisherPort;
     private final ReviewInboxService reviewInboxService;
     private final StoreProfileService storeProfileService;
     private final AiTextGenerationService aiTextGenerationService;
 
     public StoreReviewService(
             StoreReviewPort storeReviewPort,
+            ReviewReplyPublisherPort reviewReplyPublisherPort,
             ReviewInboxService reviewInboxService,
             StoreProfileService storeProfileService,
             AiTextGenerationService aiTextGenerationService
     ) {
         this.storeReviewPort = storeReviewPort;
+        this.reviewReplyPublisherPort = reviewReplyPublisherPort;
         this.reviewInboxService = reviewInboxService;
         this.storeProfileService = storeProfileService;
         this.aiTextGenerationService = aiTextGenerationService;
     }
 
     public List<StoreReview> getReviews(UUID storeId, String keyword) {
+        storeProfileService.getStore(storeId);
         List<StoreReview> reviews = storeReviewPort.findByStoreId(storeId).stream()
                 .sorted(Comparator.comparing(StoreReview::reviewedAt).reversed())
                 .toList();
@@ -54,28 +66,63 @@ public class StoreReviewService {
 
     public StoreReviewSummary getSummary(UUID storeId) {
         StoreProfile storeProfile = storeProfileService.getStore(storeId);
-        int syncedCount = storeReviewPort.findByStoreId(storeId).size();
+        List<StoreReview> syncedReviews = storeReviewPort.findByStoreId(storeId);
+        int syncedCount = syncedReviews.size();
+        String platform = syncedReviews.stream()
+                .findFirst()
+                .map(StoreReview::platform)
+                .orElse(MOCK_MAP_PLATFORM);
         return new StoreReviewSummary(
-                "GOOGLE",
+                platform,
                 storeProfile.googleTotalReviews(),
                 syncedCount,
                 storeProfile.googleReviewUrl()
         );
     }
 
-    public List<StoreReview> syncGoogleReviews(UUID storeId, int limit) {
+    public List<StoreReview> syncMockMapReviewsAndList(UUID storeId) {
+        StoreReviewPort.MergeResult mergeResult = pullMockMapReviews(storeId);
+        log.info(
+                "MockMap review manual sync completed: storeId={}, newReviews={}, updatedReviews={}",
+                storeId,
+                mergeResult.newReviews(),
+                mergeResult.updatedReviews()
+        );
+        return getReviews(storeId, null);
+    }
+
+    public MockMapReviewSyncResult syncMockMapReviews(UUID storeId) {
+        if (!StringUtils.hasText(storeProfileService.getStore(storeId).googlePlaceId())) {
+            return MockMapReviewSyncResult.skipped();
+        }
+
+        try {
+            StoreReviewPort.MergeResult mergeResult = pullMockMapReviews(storeId);
+            return new MockMapReviewSyncResult(
+                    1,
+                    mergeResult.newReviews(),
+                    mergeResult.updatedReviews(),
+                    null
+            );
+        } catch (RuntimeException exception) {
+            log.warn("MockMap review sync failed for storeId={}: {}", storeId, exception.getMessage());
+            return new MockMapReviewSyncResult(1, 0, 0, exception.getMessage());
+        }
+    }
+
+    private StoreReviewPort.MergeResult pullMockMapReviews(UUID storeId) {
         StoreProfile storeProfile = storeProfileService.getStore(storeId);
-        if (storeProfile.googlePlaceId() == null || storeProfile.googlePlaceId().isBlank()) {
-            throw new IllegalArgumentException("Google Place ID가 등록되지 않았습니다.");
+        if (!StringUtils.hasText(storeProfile.googlePlaceId())) {
+            throw new IllegalArgumentException("MockMap place_id가 등록되지 않았습니다.");
         }
 
         ReviewInbox reviewInbox = reviewInboxService.getUnifiedInbox(List.of(storeProfile.googlePlaceId()));
-        List<StoreReview> synced = reviewInbox.reviews().stream()
-                .limit(limit)
+        List<StoreReview> incoming = reviewInbox.reviews().stream()
                 .map(review -> new StoreReview(
                         UUID.randomUUID(),
                         storeId,
                         review.sourcePlatform(),
+                        review.sourceReviewId(),
                         review.authorName(),
                         review.rating(),
                         review.content(),
@@ -85,19 +132,52 @@ public class StoreReviewService {
                 ))
                 .toList();
 
-        storeReviewPort.replaceByStoreId(storeId, synced);
+        StoreReviewPort.MergeResult mergeResult = storeReviewPort.mergeFromSource(storeId, incoming);
         storeProfileService.updateGoogleReviewMeta(storeId, reviewInbox.summary().totalReviews());
-        return synced;
+        return mergeResult;
     }
 
-    public String generateAiDraft(UUID reviewId) {
+    public MockMapReviewSyncResult syncAllMockMapReviews() {
+        List<StoreProfile> stores = storeProfileService.getStores().stream()
+                .filter(store -> StringUtils.hasText(store.googlePlaceId()))
+                .toList();
+
+        int storesProcessed = 0;
+        int newReviews = 0;
+        int updatedReviews = 0;
+
+        for (StoreProfile store : stores) {
+            MockMapReviewSyncResult result = syncMockMapReviews(store.id());
+            if (result.error() != null) {
+                continue;
+            }
+            storesProcessed++;
+            newReviews += result.newReviews();
+            updatedReviews += result.updatedReviews();
+        }
+
+        return new MockMapReviewSyncResult(storesProcessed, newReviews, updatedReviews, null);
+    }
+
+    public record MockMapReviewSyncResult(
+            int storesProcessed,
+            int newReviews,
+            int updatedReviews,
+            String error
+    ) {
+        public static MockMapReviewSyncResult skipped() {
+            return new MockMapReviewSyncResult(0, 0, 0, null);
+        }
+    }
+
+    public AiGeneratedText suggestReviewReply(UUID reviewId) {
         StoreReview review = storeReviewPort.findById(reviewId);
         if (review == null) {
             throw new NotFoundException("리뷰를 찾을 수 없습니다. reviewId=" + reviewId);
         }
 
         StoreProfile storeProfile = storeProfileService.getStore(review.storeId());
-        return aiTextGenerationService.generateReviewReply(new ReviewReplyPrompt(
+        return aiTextGenerationService.suggestReviewReply(new ReviewReplyPrompt(
                 storeProfile.name(),
                 review.content(),
                 review.rating()
@@ -109,11 +189,17 @@ public class StoreReviewService {
         if (review == null) {
             throw new NotFoundException("리뷰를 찾을 수 없습니다. reviewId=" + reviewId);
         }
+        if (!StringUtils.hasText(replyContent)) {
+            throw new IllegalArgumentException("답글 내용은 필수입니다.");
+        }
+
+        reviewReplyPublisherPort.publishReply(review, replyContent.trim());
 
         StoreReview replied = new StoreReview(
                 review.id(),
                 review.storeId(),
                 review.platform(),
+                review.sourceReviewId(),
                 review.authorName(),
                 review.rating(),
                 review.content(),
@@ -125,7 +211,7 @@ public class StoreReviewService {
     }
 
     public StoreReview autoReplyWithAi(UUID reviewId) {
-        String aiDraft = generateAiDraft(reviewId);
-        return reply(reviewId, aiDraft);
+        AiGeneratedText suggestion = suggestReviewReply(reviewId);
+        return reply(reviewId, suggestion.text());
     }
 }

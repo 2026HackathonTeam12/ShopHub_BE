@@ -13,5 +13,10 @@ public interface StoreReviewPort {
 
     void replaceByStoreId(UUID storeId, List<StoreReview> reviews);
 
+    MergeResult mergeFromSource(UUID storeId, List<StoreReview> reviews);
+
     StoreReview save(StoreReview storeReview);
+
+    record MergeResult(int newReviews, int updatedReviews) {
+    }
 }

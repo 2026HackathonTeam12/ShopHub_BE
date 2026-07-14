@@ -84,7 +84,7 @@ public class DashboardService {
                 ),
                 List.of(
                         new DashboardOverview.ChecklistItem("check-hours", "오늘 영업시간 확인", true),
-                        new DashboardOverview.ChecklistItem("reply-review", "최근 Google 리뷰에 답글 달기", false),
+                        new DashboardOverview.ChecklistItem("reply-review", "최근 MockMap 리뷰에 답글 달기", false),
                         new DashboardOverview.ChecklistItem("publish-content", "오늘의 게시물 발행하기", false)
                 ),
                 recent,

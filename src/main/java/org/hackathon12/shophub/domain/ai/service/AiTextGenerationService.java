@@ -1,5 +1,6 @@
 package org.hackathon12.shophub.domain.ai.service;
 
+import org.hackathon12.shophub.domain.ai.model.AiGeneratedText;
 import org.hackathon12.shophub.domain.ai.model.ContentSuggestionPrompt;
 import org.hackathon12.shophub.domain.ai.model.InstagramCaptionPrompt;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
@@ -16,15 +17,15 @@ public class AiTextGenerationService {
         this.aiTextGenerationPort = aiTextGenerationPort;
     }
 
-    public ContentSuggestion generateContentSuggestion(ContentSuggestionPrompt prompt) {
+    public ContentSuggestion suggestContent(ContentSuggestionPrompt prompt) {
         return aiTextGenerationPort.generateContentSuggestion(prompt);
     }
 
-    public String generateInstagramCaption(InstagramCaptionPrompt prompt) {
+    public AiGeneratedText suggestInstagramCaption(InstagramCaptionPrompt prompt) {
         return aiTextGenerationPort.generateInstagramCaption(prompt);
     }
 
-    public String generateReviewReply(ReviewReplyPrompt prompt) {
+    public AiGeneratedText suggestReviewReply(ReviewReplyPrompt prompt) {
         return aiTextGenerationPort.generateReviewReply(prompt);
     }
 }

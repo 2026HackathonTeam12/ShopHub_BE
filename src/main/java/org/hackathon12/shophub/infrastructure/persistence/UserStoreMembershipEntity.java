@@ -68,4 +68,8 @@ public class UserStoreMembershipEntity {
         entity.createdAt = createdAt;
         return entity;
     }
+
+    public StoreProfileEntity getStore() {
+        return store;
+    }
 }

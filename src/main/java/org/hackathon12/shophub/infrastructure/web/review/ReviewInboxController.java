@@ -26,7 +26,7 @@ public class ReviewInboxController {
     @GetMapping("/inbox")
     public ReviewInbox getInbox(@RequestParam List<String> placeIds) {
         if (CollectionUtils.isEmpty(placeIds)) {
-            throw new ResponseStatusException(BAD_REQUEST, "최소 1개 이상의 placeIds가 필요합니다.");
+            throw new ResponseStatusException(BAD_REQUEST, "최소 1개 이상의 placeIds가 필요합니다. MockMap GET /api/reviews/?place_id= 와 동일한 place_id를 사용합니다.");
         }
         return reviewInboxService.getUnifiedInbox(placeIds);
     }

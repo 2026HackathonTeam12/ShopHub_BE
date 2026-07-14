@@ -1,5 +1,7 @@
 package org.hackathon12.shophub.domain.review.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import java.time.Instant;
 import java.util.List;
 
@@ -29,6 +31,8 @@ public record ReviewInbox(
             String sourcePlatform,
             String placeId,
             String storeName,
+            @JsonIgnore
+            String sourceReviewId,
             String authorName,
             int rating,
             String content,

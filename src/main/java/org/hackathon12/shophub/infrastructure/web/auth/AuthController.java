@@ -2,6 +2,7 @@ package org.hackathon12.shophub.infrastructure.web.auth;
 
 import org.hackathon12.shophub.domain.auth.model.UserAccount;
 import org.hackathon12.shophub.domain.auth.service.AuthService;
+import org.hackathon12.shophub.domain.auth.service.AuthSessionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -17,9 +18,11 @@ import java.util.UUID;
 public class AuthController {
 
     private final AuthService authService;
+    private final AuthSessionService authSessionService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, AuthSessionService authSessionService) {
         this.authService = authService;
+        this.authSessionService = authSessionService;
     }
 
     @PostMapping("/signup")
@@ -36,9 +39,10 @@ public class AuthController {
     }
 
     private AuthResponse toResponse(UserAccount account) {
+        Instant expiresAt = Instant.now().plusSeconds(60L * 60L * 24L);
         return new AuthResponse(
-                UUID.randomUUID().toString(),
-                Instant.now().plusSeconds(60L * 60L * 24L),
+                authSessionService.issueToken(account.id()),
+                expiresAt,
                 new UserProfile(account.id(), account.email(), account.name())
         );
     }

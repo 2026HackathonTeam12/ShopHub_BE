@@ -1,5 +1,6 @@
 package org.hackathon12.shophub.domain.instagram.service;
 
+import org.hackathon12.shophub.domain.ai.model.AiGeneratedText;
 import org.hackathon12.shophub.domain.ai.model.InstagramCaptionPrompt;
 import org.hackathon12.shophub.domain.ai.service.AiTextGenerationService;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
@@ -41,6 +42,14 @@ public class InstagramPublishService {
         return generateAndPublish(storeId, List.of(firstImageUrl, secondImageUrl));
     }
 
+    public void ensurePublishReady() {
+        instagramPublishPort.ensurePublishReady();
+    }
+
+    public void requireStoreExists(UUID storeId) {
+        storeProfileService.getStore(storeId);
+    }
+
     public InstagramPublishResult generateAndPublish(UUID storeId, List<String> imageUrls) {
         StoreProfile store = storeProfileService.getStore(storeId);
         ContentItem baseContent = selectBaseContent(storeId);
@@ -54,13 +63,15 @@ public class InstagramPublishService {
                 baseContent.title(),
                 baseContent.body()
         );
-        String caption = aiTextGenerationService.generateInstagramCaption(prompt);
+        AiGeneratedText suggestion = aiTextGenerationService.suggestInstagramCaption(prompt);
+        String caption = suggestion.text();
         String mediaId = instagramPublishPort.publishPost(caption, imageUrls);
 
         return new InstagramPublishResult(
                 mediaId,
                 caption,
                 imageUrls,
+                "https://www.instagram.com/commentcopybot/",
                 Instant.now()
         );
     }

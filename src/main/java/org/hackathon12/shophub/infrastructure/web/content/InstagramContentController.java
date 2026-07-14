@@ -34,6 +34,8 @@ public class InstagramContentController {
             @PathVariable UUID storeId,
             @RequestPart("images") List<MultipartFile> images
     ) {
+        instagramPublishService.requireStoreExists(storeId);
+        instagramPublishService.ensurePublishReady();
         List<String> imageUrls = localImageStorageService.saveInstagramImages(images);
         return instagramPublishService.generateAndPublish(storeId, imageUrls);
     }

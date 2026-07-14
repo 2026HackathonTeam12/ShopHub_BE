@@ -1,5 +1,7 @@
 package org.hackathon12.shophub.infrastructure.web.review;
 
+import org.hackathon12.shophub.domain.ai.model.AiGenerationSource;
+import org.hackathon12.shophub.domain.ai.model.AiGeneratedText;
 import org.hackathon12.shophub.domain.review.model.StoreReview;
 import org.hackathon12.shophub.domain.review.model.StoreReviewSummary;
 import org.hackathon12.shophub.domain.review.service.StoreReviewService;
@@ -39,19 +41,16 @@ public class StoreReviewController {
         return storeReviewService.getReviews(storeId, keyword);
     }
 
-    @PostMapping("/v1/stores/{storeId}/reviews/sync-google")
+    @PostMapping("/v1/stores/{storeId}/reviews/sync-mockmap")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    public List<StoreReview> syncGoogleReviews(
-            @PathVariable UUID storeId,
-            @RequestBody(required = false) SyncGoogleReviewsRequest request
-    ) {
-        int limit = request == null || request.limit() == null ? 5 : request.limit();
-        return storeReviewService.syncGoogleReviews(storeId, limit);
+    public List<StoreReview> syncMockMapReviews(@PathVariable UUID storeId) {
+        return storeReviewService.syncMockMapReviewsAndList(storeId);
     }
 
     @PostMapping("/v1/reviews/{reviewId}/ai-draft")
     public AiDraftResponse createAiDraft(@PathVariable UUID reviewId) {
-        return new AiDraftResponse(storeReviewService.generateAiDraft(reviewId));
+        AiGeneratedText suggestion = storeReviewService.suggestReviewReply(reviewId);
+        return new AiDraftResponse(suggestion.text(), suggestion.source());
     }
 
     @PostMapping("/v1/reviews/{reviewId}/ai-auto-reply")
@@ -64,13 +63,9 @@ public class StoreReviewController {
         return storeReviewService.reply(reviewId, request.content());
     }
 
-    public record SyncGoogleReviewsRequest(
-            Integer limit
-    ) {
-    }
-
     public record AiDraftResponse(
-            String content
+            String content,
+            AiGenerationSource source
     ) {
     }
 

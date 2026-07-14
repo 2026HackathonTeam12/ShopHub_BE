@@ -3,7 +3,9 @@ package org.hackathon12.shophub.infrastructure.web.store;
 import org.hackathon12.shophub.domain.store.model.BusinessHour;
 import org.hackathon12.shophub.domain.store.model.MenuItem;
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
+import org.hackathon12.shophub.domain.store.service.StoreMembershipService;
 import org.hackathon12.shophub.domain.store.service.StoreProfileService;
+import org.hackathon12.shophub.infrastructure.web.auth.AuthContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -28,19 +31,29 @@ public class StoreProfileController {
     private static final Pattern HOURS_PATTERN = Pattern.compile("(\\d{1,2}:\\d{2})\\s*[-~]\\s*(\\d{1,2}:\\d{2})");
 
     private final StoreProfileService storeProfileService;
+    private final StoreMembershipService storeMembershipService;
+    private final AuthContext authContext;
 
-    public StoreProfileController(StoreProfileService storeProfileService) {
+    public StoreProfileController(
+            StoreProfileService storeProfileService,
+            StoreMembershipService storeMembershipService,
+            AuthContext authContext
+    ) {
         this.storeProfileService = storeProfileService;
+        this.storeMembershipService = storeMembershipService;
+        this.authContext = authContext;
     }
 
     @GetMapping
-    public List<StoreProfile> getStores() {
-        return storeProfileService.getStores();
+    public List<StoreProfile> getStores(HttpServletRequest request) {
+        return authContext.resolveUserId(request)
+                .map(storeMembershipService::findStoresForUser)
+                .orElseGet(storeProfileService::getStores);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public StoreProfile createStore(@RequestBody CreateStoreRequest request) {
+    public StoreProfile createStore(@RequestBody CreateStoreRequest request, HttpServletRequest httpRequest) {
         String introduction = firstNonBlank(request.introduction(), request.description());
         String address = firstNonBlank(request.address(), request.neighborhood());
         String toneOfVoice = firstNonBlank(request.toneOfVoice(), request.tone());
@@ -72,7 +85,7 @@ public class StoreProfileController {
             }
         }
 
-        return storeProfileService.createStore(
+        StoreProfile created = storeProfileService.createStore(
                 request.name(),
                 request.phone(),
                 introduction,
@@ -84,6 +97,11 @@ public class StoreProfileController {
                 request.googlePlaceId(),
                 request.googleReviewUrl()
         );
+
+        authContext.resolveUserId(httpRequest)
+                .ifPresent(userId -> storeMembershipService.ensureOwnerMembership(userId, created.id()));
+
+        return created;
     }
 
     @GetMapping("/{storeId}/profile")

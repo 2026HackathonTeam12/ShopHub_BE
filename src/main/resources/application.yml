@@ -15,11 +15,20 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
-google:
-  places:
-    api-key: ${GOOGLE_PLACES_API_KEY:}
-    base-url: ${GOOGLE_PLACES_BASE_URL:https://maps.googleapis.com}
-    language: ${GOOGLE_PLACES_LANGUAGE:ko}
+mock-map:
+  api:
+    base-url: ${MOCK_MAP_API_BASE_URL:http://localhost:8000}
+    health-path: ${MOCK_MAP_HEALTH_PATH:/health/}
+    oauth-token-path: ${MOCK_MAP_OAUTH_TOKEN_PATH:/oauth/token/}
+    reviews-path: ${MOCK_MAP_REVIEWS_PATH:/api/reviews/}
+  oauth:
+    client-id: ${MOCK_MAP_OAUTH_CLIENT_ID:}
+    client-secret: ${MOCK_MAP_OAUTH_CLIENT_SECRET:}
+    refresh-token: ${MOCK_MAP_OAUTH_REFRESH_TOKEN:}
+    redirect-uri: ${MOCK_MAP_OAUTH_REDIRECT_URI:http://localhost:8080/api/integrations/mockmap/oauth/callback}
+    authorize-path: ${MOCK_MAP_OAUTH_AUTHORIZE_PATH:/oauth/authorize/}
+    revoke-path: ${MOCK_MAP_OAUTH_REVOKE_PATH:/oauth/revoke/}
+    token-store-path: ${MOCK_MAP_OAUTH_TOKEN_STORE_PATH:./.mockmap-oauth-store.json}
 
 openai:
   api-key: ${OPENAI_API_KEY:}
@@ -30,12 +39,19 @@ openai:
 instagram:
   graph:
     base-url: ${INSTAGRAM_GRAPH_BASE_URL:https://graph.instagram.com/v21.0}
-    account-id: ${INSTAGRAM_GRAPH_ACCOUNT_ID:}
+    account-id: ${INSTAGRAM_GRAPH_ACCOUNT_ID:17841476807685488}
     access-token: ${INSTAGRAM_GRAPH_ACCESS_TOKEN:}
+    allowed-account-id: ${INSTAGRAM_GRAPH_ALLOWED_ACCOUNT_ID:17841476807685488}
+    allowed-username: ${INSTAGRAM_GRAPH_ALLOWED_USERNAME:commentcopybot}
     max-attempts: ${INSTAGRAM_GRAPH_MAX_ATTEMPTS:15}
     interval-ms: ${INSTAGRAM_GRAPH_INTERVAL_MS:2000}
 
 app:
+  review-source:
+    provider: ${APP_REVIEW_SOURCE_PROVIDER:mockmap}
+  review-sync:
+    enabled: ${APP_REVIEW_SYNC_ENABLED:true}
+    cron: ${APP_REVIEW_SYNC_CRON:0 */5 * * * *}
   storage:
     upload-dir: ${APP_STORAGE_UPLOAD_DIR:./uploads}
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}

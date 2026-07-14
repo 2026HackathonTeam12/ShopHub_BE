@@ -39,6 +39,7 @@ public class ReviewInboxService {
                         sourceData.sourcePlatform(),
                         sourceData.placeId(),
                         sourceData.storeName(),
+                        review.sourceReviewId(),
                         review.authorName(),
                         review.rating(),
                         review.content(),

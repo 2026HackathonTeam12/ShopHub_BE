@@ -4,5 +4,7 @@ import java.util.List;
 
 public interface InstagramPublishPort {
 
+    void ensurePublishReady();
+
     String publishPost(String caption, List<String> imageUrls);
 }

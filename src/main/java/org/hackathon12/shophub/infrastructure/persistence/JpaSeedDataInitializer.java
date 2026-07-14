@@ -138,7 +138,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                 new StoreReview(
                         UUID.fromString("d2c39a88-6461-4f93-9f7f-f40103f5205c"),
                         STORE_ID,
-                        "GOOGLE",
+                        "MOCK_MAP",
+                        "1",
                         "하온 서",
                         5,
                         "커피도 정말 맛있고, 직원분이 메뉴를 친절하게 설명해주셨어요.",
@@ -149,7 +150,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                 new StoreReview(
                         UUID.fromString("74867f6f-27f8-47dd-a838-b6fd4daa618f"),
                         STORE_ID,
-                        "GOOGLE",
+                        "MOCK_MAP",
+                        "2",
                         "민준 김",
                         4,
                         "조용히 일하기 좋은 카페입니다. 디카페인 옵션이 더 많아지면 좋겠어요.",
@@ -160,7 +162,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                 new StoreReview(
                         UUID.fromString("b9cfef29-b5d9-4fbb-a3f3-c4ccbb1fdcde"),
                         STORE_ID,
-                        "GOOGLE",
+                        "MOCK_MAP",
+                        "3",
                         "예린 박",
                         5,
                         "취향시에 선물 포장도 너무 예뻐요. 다음에도 올게요!",
@@ -171,7 +174,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                 new StoreReview(
                         UUID.fromString("66e81006-bf6f-473b-9c0f-7d4f88f56dd3"),
                         STORE_ID,
-                        "GOOGLE",
+                        "MOCK_MAP",
+                        "4",
                         "도현 이",
                         4,
                         "연남동에서 가장 편안한 카페 분위기예요. 라떼가 특히 좋아요.",
@@ -182,7 +186,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                 new StoreReview(
                         UUID.fromString("2d59f447-f73c-482b-a8f9-17a1af832d7b"),
                         STORE_ID,
-                        "GOOGLE",
+                        "MOCK_MAP",
+                        "5",
                         "서진 윤",
                         5,
                         "친절하고 분위기가 좋아요. 주말에는 조금 붐비네요.",

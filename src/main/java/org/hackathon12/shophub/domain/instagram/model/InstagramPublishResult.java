@@ -7,6 +7,7 @@ public record InstagramPublishResult(
         String mediaId,
         String caption,
         List<String> imageUrls,
+        String profileUrl,
         Instant publishedAt
 ) {
 }

@@ -32,6 +32,8 @@ public class StoreReviewEntity {
     @Column(nullable = false)
     private String platform;
 
+    private String sourceReviewId;
+
     @Column(nullable = false)
     private String authorName;
 
@@ -58,6 +60,7 @@ public class StoreReviewEntity {
         entity.id = storeReview.id();
         entity.store = StoreProfileEntity.reference(storeReview.storeId());
         entity.platform = storeReview.platform();
+        entity.sourceReviewId = storeReview.sourceReviewId();
         entity.authorName = storeReview.authorName();
         entity.rating = storeReview.rating();
         entity.content = storeReview.content();
@@ -72,6 +75,7 @@ public class StoreReviewEntity {
                 id,
                 store.getId(),
                 platform,
+                sourceReviewId,
                 authorName,
                 rating,
                 content,

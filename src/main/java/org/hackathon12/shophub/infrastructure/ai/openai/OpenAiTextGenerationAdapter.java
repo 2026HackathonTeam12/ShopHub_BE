@@ -1,10 +1,13 @@
 package org.hackathon12.shophub.infrastructure.ai.openai;
 
+import org.hackathon12.shophub.domain.ai.model.AiGeneratedText;
+import org.hackathon12.shophub.domain.ai.model.AiGenerationSource;
 import org.hackathon12.shophub.domain.ai.model.ContentSuggestionPrompt;
 import org.hackathon12.shophub.domain.ai.model.InstagramCaptionPrompt;
 import org.hackathon12.shophub.domain.ai.model.ReviewReplyPrompt;
 import org.hackathon12.shophub.domain.ai.port.AiTextGenerationPort;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
+import org.hackathon12.shophub.infrastructure.ai.template.AiTextTemplateProvider;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -20,18 +23,24 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
 
     private final RestClient restClient;
     private final OpenAiProperties properties;
+    private final AiTextTemplateProvider templateProvider;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public OpenAiTextGenerationAdapter(RestClient.Builder restClientBuilder, OpenAiProperties properties) {
+    public OpenAiTextGenerationAdapter(
+            RestClient.Builder restClientBuilder,
+            OpenAiProperties properties,
+            AiTextTemplateProvider templateProvider
+    ) {
         this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
         this.properties = properties;
+        this.templateProvider = templateProvider;
     }
 
     @Override
     public ContentSuggestion generateContentSuggestion(ContentSuggestionPrompt prompt) {
-        ContentSuggestion fallback = fallbackContentSuggestion(prompt);
+        AiTextTemplateProvider.TemplateContent template = templateProvider.contentSuggestion(prompt);
         if (!StringUtils.hasText(properties.apiKey())) {
-            return fallback;
+            return toContentSuggestion(template, AiGenerationSource.TEMPLATE);
         }
 
         String systemPrompt = """
@@ -62,9 +71,9 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
                 safe(prompt.eventText())
         );
 
-        String rawResponse = askOpenAi(systemPrompt, userPrompt, null);
+        String rawResponse = callOpenAi(systemPrompt, userPrompt);
         if (!StringUtils.hasText(rawResponse)) {
-            return fallback;
+            return toContentSuggestion(template, AiGenerationSource.TEMPLATE);
         }
 
         try {
@@ -72,19 +81,19 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
             String title = root.path("title").asText();
             String body = root.path("body").asText();
             if (!StringUtils.hasText(title) || !StringUtils.hasText(body)) {
-                return fallback;
+                return toContentSuggestion(template, AiGenerationSource.TEMPLATE);
             }
-            return new ContentSuggestion(title.trim(), body.trim());
+            return new ContentSuggestion(title.trim(), body.trim(), AiGenerationSource.AI);
         } catch (Exception exception) {
-            return fallback;
+            return toContentSuggestion(template, AiGenerationSource.TEMPLATE);
         }
     }
 
     @Override
-    public String generateInstagramCaption(InstagramCaptionPrompt prompt) {
-        String fallback = fallbackInstagramCaption(prompt);
+    public AiGeneratedText generateInstagramCaption(InstagramCaptionPrompt prompt) {
+        String template = templateProvider.instagramCaption(prompt);
         if (!StringUtils.hasText(properties.apiKey())) {
-            return fallback;
+            return new AiGeneratedText(template, AiGenerationSource.TEMPLATE);
         }
 
         String systemPrompt = """
@@ -116,14 +125,18 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
                 safe(prompt.contentBody())
         );
 
-        return askOpenAi(systemPrompt, userPrompt, fallback);
+        String aiResult = callOpenAi(systemPrompt, userPrompt);
+        if (!StringUtils.hasText(aiResult)) {
+            return new AiGeneratedText(template, AiGenerationSource.TEMPLATE);
+        }
+        return new AiGeneratedText(aiResult.trim(), AiGenerationSource.AI);
     }
 
     @Override
-    public String generateReviewReply(ReviewReplyPrompt prompt) {
-        String fallback = fallbackReviewReply(prompt);
+    public AiGeneratedText generateReviewReply(ReviewReplyPrompt prompt) {
+        String template = templateProvider.reviewReply(prompt);
         if (!StringUtils.hasText(properties.apiKey())) {
-            return fallback;
+            return new AiGeneratedText(template, AiGenerationSource.TEMPLATE);
         }
 
         String systemPrompt = """
@@ -148,10 +161,14 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
                 safe(prompt.reviewContent())
         );
 
-        return askOpenAi(systemPrompt, userPrompt, fallback);
+        String aiResult = callOpenAi(systemPrompt, userPrompt);
+        if (!StringUtils.hasText(aiResult)) {
+            return new AiGeneratedText(template, AiGenerationSource.TEMPLATE);
+        }
+        return new AiGeneratedText(aiResult.trim(), AiGenerationSource.AI);
     }
 
-    private String askOpenAi(String systemPrompt, String userPrompt, String fallback) {
+    private String callOpenAi(String systemPrompt, String userPrompt) {
         try {
             OpenAiChatCompletionResponse response = restClient.post()
                     .uri("/v1/chat/completions")
@@ -169,15 +186,20 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
                     .body(OpenAiChatCompletionResponse.class);
 
             if (response == null || response.choices() == null || response.choices().isEmpty()) {
-                return fallback == null ? "" : fallback;
+                return null;
             }
-            String content = response.choices().get(0).message() == null
-                    ? null
-                    : response.choices().get(0).message().content();
-            return StringUtils.hasText(content) ? content.trim() : (fallback == null ? "" : fallback);
+            OpenAiMessage message = response.choices().get(0).message();
+            return message == null ? null : message.content();
         } catch (Exception exception) {
-            return fallback == null ? "" : fallback;
+            return null;
         }
+    }
+
+    private ContentSuggestion toContentSuggestion(
+            AiTextTemplateProvider.TemplateContent template,
+            AiGenerationSource source
+    ) {
+        return new ContentSuggestion(template.title(), template.body(), source);
     }
 
     private String safeModel() {
@@ -190,39 +212,6 @@ public class OpenAiTextGenerationAdapter implements AiTextGenerationPort {
 
     private String safe(String value) {
         return StringUtils.hasText(value) ? value.trim() : "-";
-    }
-
-    private String fallbackInstagramCaption(InstagramCaptionPrompt prompt) {
-        return "%s의 오늘 추천 소식을 전해드립니다. %s %s\n운영시간은 %s이며, 편하게 들러주세요."
-                .formatted(
-                        safe(prompt.storeName()),
-                        safe(prompt.contentTitle()),
-                        safe(prompt.contentBody()),
-                        safe(prompt.businessHoursSummary())
-                );
-    }
-
-    private ContentSuggestion fallbackContentSuggestion(ContentSuggestionPrompt prompt) {
-        return new ContentSuggestion(
-                safe(prompt.storeName()) + " 오늘의 소식",
-                "%s 관련 안내드립니다. %s\n운영시간은 %s이며, 대표 메뉴는 %s입니다."
-                        .formatted(
-                                safe(prompt.category()),
-                                safe(prompt.eventText()),
-                                safe(prompt.businessHoursSummary()),
-                                safe(prompt.menuSummary())
-                        )
-        );
-    }
-
-    private String fallbackReviewReply(ReviewReplyPrompt prompt) {
-        if (prompt.rating() <= 2) {
-            return "소중한 의견 남겨주셔서 감사합니다. 불편을 드려 죄송하며 말씀해주신 부분을 빠르게 점검하고 개선하겠습니다.";
-        }
-        if (prompt.rating() == 3) {
-            return "리뷰 남겨주셔서 감사합니다. 남겨주신 의견을 반영해 더 만족스러운 방문 경험을 드릴 수 있도록 노력하겠습니다.";
-        }
-        return "따뜻한 리뷰 감사합니다. 다음 방문에서도 편안하고 좋은 경험을 드릴 수 있도록 정성껏 준비하겠습니다.";
     }
 
     private record OpenAiChatCompletionResponse(

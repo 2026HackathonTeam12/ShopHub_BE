@@ -7,6 +7,8 @@ public record InstagramGraphProperties(
         String baseUrl,
         String accountId,
         String accessToken,
+        String allowedAccountId,
+        String allowedUsername,
         Integer maxAttempts,
         Long intervalMs
 ) {

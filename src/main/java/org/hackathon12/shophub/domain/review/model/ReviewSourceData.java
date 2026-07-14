@@ -14,6 +14,7 @@ public record ReviewSourceData(
 ) {
 
     public record ReviewItem(
+            String sourceReviewId,
             String authorName,
             int rating,
             String content,

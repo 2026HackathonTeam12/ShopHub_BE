@@ -21,8 +21,13 @@ public class InstagramGraphPublishAdapter implements InstagramPublishPort {
     }
 
     @Override
-    public String publishPost(String caption, List<String> imageUrls) {
+    public void ensurePublishReady() {
         validateCredentials();
+    }
+
+    @Override
+    public String publishPost(String caption, List<String> imageUrls) {
+        ensurePublishReady();
         validateImages(imageUrls);
 
         if (imageUrls.size() == 1) {
@@ -153,6 +158,16 @@ public class InstagramGraphPublishAdapter implements InstagramPublishPort {
         if (!StringUtils.hasText(properties.accountId()) || !StringUtils.hasText(properties.accessToken())) {
             throw new IllegalArgumentException("Instagram Graph API 계정/토큰이 설정되지 않았습니다.");
         }
+        if (StringUtils.hasText(properties.allowedAccountId())
+                && !properties.allowedAccountId().equals(properties.accountId())) {
+            throw new IllegalArgumentException(
+                    "Instagram 게시는 @" + safeUsername() + " 계정만 사용할 수 있습니다."
+            );
+        }
+    }
+
+    private String safeUsername() {
+        return StringUtils.hasText(properties.allowedUsername()) ? properties.allowedUsername() : "commentcopybot";
     }
 
     private void validateImages(List<String> imageUrls) {

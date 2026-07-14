@@ -1,8 +1,8 @@
 package org.hackathon12.shophub.global.error;
 
-import org.hackathon12.shophub.infrastructure.google.GooglePlacesApiException;
-import org.hackathon12.shophub.infrastructure.instagram.InstagramGraphApiException;
+import org.hackathon12.shophub.infrastructure.mockmap.MockMapApiException;
 import org.hackathon12.shophub.infrastructure.ai.openai.OpenAiApiException;
+import org.hackathon12.shophub.infrastructure.instagram.InstagramGraphApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -14,9 +14,9 @@ import java.time.Instant;
 public class GlobalExceptionHandler {
 
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
-    @ExceptionHandler(GooglePlacesApiException.class)
-    public ApiErrorResponse handleGooglePlacesApiException(GooglePlacesApiException exception) {
-        return new ApiErrorResponse("GOOGLE_PLACES_API_ERROR", exception.getMessage(), Instant.now());
+    @ExceptionHandler(MockMapApiException.class)
+    public ApiErrorResponse handleMockMapApiException(MockMapApiException exception) {
+        return new ApiErrorResponse("MOCK_MAP_API_ERROR", exception.getMessage(), Instant.now());
     }
 
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
