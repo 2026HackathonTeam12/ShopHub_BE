@@ -72,7 +72,8 @@ public class ContentService {
                 body,
                 normalizedChannels,
                 ContentStatus.DRAFT,
-                Instant.now()
+                Instant.now(),
+                ContentItem.pendingPlatformsFor(normalizedChannels)
         );
         return contentPort.save(contentItem);
     }
@@ -113,7 +114,8 @@ public class ContentService {
                 current.body(),
                 current.channels(),
                 ContentStatus.DRAFT,
-                Instant.now()
+                Instant.now(),
+                ContentItem.pendingPlatformsFor(current.channels())
         );
         return contentPort.save(retried);
     }
@@ -133,7 +135,8 @@ public class ContentService {
                 current.body(),
                 current.channels(),
                 status,
-                Instant.now()
+                Instant.now(),
+                current.platforms()
         );
         return contentPort.save(updated);
     }

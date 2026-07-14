@@ -103,7 +103,8 @@ public class XPublishService {
                 "매장 운영 정보와 메뉴 소식을 전합니다.",
                 List.of(ContentChannel.X.name()),
                 ContentStatus.DRAFT,
-                Instant.now()
+                Instant.now(),
+                ContentItem.pendingPlatformsFor(List.of(ContentChannel.X.name()))
         );
     }
 

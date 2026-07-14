@@ -292,6 +292,11 @@ paths:
                     - INSTAGRAM
                     - NAVER_BLOG
                   status: DRAFT
+                  platforms:
+                    - platform: INSTAGRAM
+                      status: PENDING
+                    - platform: NAVER_BLOG
+                      status: PENDING
                   updatedAt: '2026-07-14T02:47:59.002Z'
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -1512,7 +1517,7 @@ components:
 
     ContentItem:
       type: object
-      required: [id, storeId, title, body, channels, status, updatedAt]
+      required: [id, storeId, title, body, channels, status, updatedAt, platforms]
       properties:
         id:
           type: string
@@ -1533,6 +1538,13 @@ components:
             - NAVER_BLOG
         status:
           $ref: '#/components/schemas/ContentStatus'
+        platforms:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentPlatformState'
+          example:
+            - platform: INSTAGRAM
+              status: PENDING
         updatedAt:
           type: string
           format: date-time

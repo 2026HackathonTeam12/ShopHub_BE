@@ -11,6 +11,13 @@ public record ContentItem(
         String body,
         List<String> channels,
         ContentStatus status,
-        Instant updatedAt
+        Instant updatedAt,
+        List<ContentPlatformState> platforms
 ) {
+    public static List<ContentPlatformState> pendingPlatformsFor(List<String> channels) {
+        return channels.stream()
+                .map(ContentChannel::fromValue)
+                .map(channel -> new ContentPlatformState(channel, ContentChannelPublishStatus.PENDING))
+                .toList();
+    }
 }

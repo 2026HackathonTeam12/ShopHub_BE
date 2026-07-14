@@ -98,7 +98,8 @@ public class InstagramPublishService {
                 "매장 운영 정보와 메뉴 소식을 전합니다.",
                 List.of(ContentChannel.INSTAGRAM.name()),
                 ContentStatus.DRAFT,
-                Instant.now()
+                Instant.now(),
+                ContentItem.pendingPlatformsFor(List.of(ContentChannel.INSTAGRAM.name()))
         );
     }
 

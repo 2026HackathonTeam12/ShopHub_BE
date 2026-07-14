@@ -79,7 +79,10 @@ public class ContentItemEntity {
         entity.store = StoreProfileEntity.reference(contentItem.storeId());
         entity.title = contentItem.title();
         entity.body = contentItem.body();
-        entity.channels = toEmbeddables(contentItem.channels(), platformStates);
+        entity.channels = toEmbeddables(
+                contentItem.channels(),
+                platformStates != null ? platformStates : contentItem.platforms()
+        );
         entity.status = contentItem.status();
         entity.updatedAt = contentItem.updatedAt();
         return entity;
@@ -95,7 +98,10 @@ public class ContentItemEntity {
                         .map(ContentChannelEmbeddable::getChannelName)
                         .toList(),
                 status,
-                updatedAt
+                updatedAt,
+                channels.stream()
+                        .map(ContentChannelEmbeddable::toDomain)
+                        .toList()
         );
     }
 

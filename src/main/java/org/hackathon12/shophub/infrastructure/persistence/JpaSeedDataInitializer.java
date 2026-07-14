@@ -110,7 +110,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                                 "비 오는 오늘, 따뜻한 라떼 한 잔으로 잠깐 쉬어가세요.",
                                 List.of(ContentChannel.INSTAGRAM.name()),
                                 ContentStatus.PUBLISHED,
-                                now.minusSeconds(3600)
+                                now.minusSeconds(3600),
+                                null
                         ),
                         List.of(new ContentPlatformState(ContentChannel.INSTAGRAM, ContentChannelPublishStatus.SUCCESS))
                 ),
@@ -122,7 +123,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                                 "산책 후엔 버터 취향시에와 모모 라떼가 좋아요.",
                                 List.of(ContentChannel.INSTAGRAM.name(), ContentChannel.FACEBOOK.name()),
                                 ContentStatus.DRAFT,
-                                now.minusSeconds(7200)
+                                now.minusSeconds(7200),
+                                null
                         ),
                         List.of(
                                 new ContentPlatformState(ContentChannel.INSTAGRAM, ContentChannelPublishStatus.PENDING),
@@ -137,7 +139,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                                 "시즌 한정 라떼를 이번 주부터 제공합니다.",
                                 List.of(ContentChannel.NAVER_BLOG.name()),
                                 ContentStatus.FAILED,
-                                now.minusSeconds(86400)
+                                now.minusSeconds(86400),
+                                null
                         ),
                         List.of(new ContentPlatformState(ContentChannel.NAVER_BLOG, ContentChannelPublishStatus.FAILED))
                 ),
@@ -153,7 +156,8 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
                                         ContentChannel.FACEBOOK.name()
                                 ),
                                 ContentStatus.SCHEDULED,
-                                now.minusSeconds(172800)
+                                now.minusSeconds(172800),
+                                null
                         ),
                         List.of(
                                 new ContentPlatformState(ContentChannel.INSTAGRAM, ContentChannelPublishStatus.PENDING),

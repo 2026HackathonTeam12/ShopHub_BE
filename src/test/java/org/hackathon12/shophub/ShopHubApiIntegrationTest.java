@@ -238,7 +238,14 @@ class ShopHubApiIntegrationTest {
     void contents_can_be_loaded_without_filter() throws Exception {
         mockMvc.perform(authed(get("/v1/stores/{storeId}/contents", STORE_ID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(greaterThan(0)));
+                .andExpect(jsonPath("$.length()").value(greaterThan(0)))
+                .andExpect(jsonPath("$[0].platforms").isArray())
+                .andExpect(jsonPath("$[0].platforms[0].platform").exists())
+                .andExpect(jsonPath("$[0].platforms[0].status").exists())
+                .andExpect(jsonPath("$[?(@.id=='3034b816-757d-487f-b4c7-d1f7bea4f78f')].platforms[0].platform")
+                        .value("INSTAGRAM"))
+                .andExpect(jsonPath("$[?(@.id=='3034b816-757d-487f-b4c7-d1f7bea4f78f')].platforms[0].status")
+                        .value("SUCCESS"));
     }
 
     @Test
