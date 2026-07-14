@@ -43,12 +43,13 @@ class XOAuthIntegrationTest {
     }
 
     @Test
-    void twitter_oauth_callback_without_code_returns_bad_request_html() throws Exception {
+    void twitter_oauth_callback_without_code_redirects_to_frontend() throws Exception {
         mockMvc.perform(get("/api/integrations/X/oauth/callback")
                         .param("state", "invalid-state"))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-                .andExpect(content().string(containsString("authorization code")));
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", containsString(
+                        "http://localhost:5173/integrations/oauth/callback?type=X&success=false"
+                )));
     }
 
     private String loginAsSeedUser() throws Exception {

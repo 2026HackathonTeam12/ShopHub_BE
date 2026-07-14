@@ -134,6 +134,24 @@ public class ContentItemEntity {
         }
     }
 
+    public void updateChannelPublishStatus(String channelName, ContentChannelPublishStatus publishStatus) {
+        for (ContentChannelEmbeddable channel : channels) {
+            if (channel.getChannelName().equals(channelName)) {
+                channel.setPublishStatus(publishStatus);
+                return;
+            }
+        }
+        throw new IllegalArgumentException("콘텐츠 채널을 찾을 수 없습니다: " + channelName);
+    }
+
+    public void setStatus(ContentStatus status) {
+        this.status = status;
+    }
+
+    public void setUpdatedAt(Instant updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
     private static List<ContentChannelEmbeddable> toEmbeddables(
             List<String> channels,
             List<ContentPlatformState> platformStates

@@ -1,6 +1,6 @@
 package org.hackathon12.shophub.infrastructure.web.content;
 
-import org.hackathon12.shophub.infrastructure.storage.LocalImageStorageService;
+import org.hackathon12.shophub.domain.content.port.ContentImageStoragePort;
 import org.hackathon12.shophub.infrastructure.web.auth.ShopHubAuthGuard;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,14 +18,14 @@ import java.util.UUID;
 @RequestMapping("/v1/stores/{storeId}/contents")
 public class ImageUploadController {
 
-    private final LocalImageStorageService localImageStorageService;
+    private final ContentImageStoragePort contentImageStoragePort;
     private final ShopHubAuthGuard shopHubAuthGuard;
 
     public ImageUploadController(
-            LocalImageStorageService localImageStorageService,
+            ContentImageStoragePort contentImageStoragePort,
             ShopHubAuthGuard shopHubAuthGuard
     ) {
-        this.localImageStorageService = localImageStorageService;
+        this.contentImageStoragePort = contentImageStoragePort;
         this.shopHubAuthGuard = shopHubAuthGuard;
     }
 
@@ -36,10 +36,10 @@ public class ImageUploadController {
             HttpServletRequest request
     ) {
         shopHubAuthGuard.requireStoreMember(request, storeId);
-        List<String> imageUrls = localImageStorageService.saveInstagramImages(images);
-        return new ImageUploadResponse(imageUrls);
+        List<String> imgUrls = contentImageStoragePort.uploadImages(images);
+        return new ImageUploadResponse(imgUrls);
     }
 
-    public record ImageUploadResponse(List<String> imageUrls) {
+    public record ImageUploadResponse(List<String> img_urls) {
     }
 }

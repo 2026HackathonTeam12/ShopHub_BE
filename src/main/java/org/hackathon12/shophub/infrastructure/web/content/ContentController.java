@@ -5,6 +5,7 @@ import org.hackathon12.shophub.domain.content.model.ContentItem;
 import org.hackathon12.shophub.domain.content.model.ContentPlatformStatusItem;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
+import org.hackathon12.shophub.domain.content.service.ContentChannelPublishService;
 import org.hackathon12.shophub.domain.content.service.ContentService;
 import org.hackathon12.shophub.infrastructure.web.auth.ShopHubAuthGuard;
 import org.springframework.http.ResponseEntity;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.UUID;
@@ -27,10 +30,16 @@ import java.util.UUID;
 public class ContentController {
 
     private final ContentService contentService;
+    private final ContentChannelPublishService contentChannelPublishService;
     private final ShopHubAuthGuard shopHubAuthGuard;
 
-    public ContentController(ContentService contentService, ShopHubAuthGuard shopHubAuthGuard) {
+    public ContentController(
+            ContentService contentService,
+            ContentChannelPublishService contentChannelPublishService,
+            ShopHubAuthGuard shopHubAuthGuard
+    ) {
         this.contentService = contentService;
+        this.contentChannelPublishService = contentChannelPublishService;
         this.shopHubAuthGuard = shopHubAuthGuard;
     }
 
@@ -68,6 +77,11 @@ public class ContentController {
                 ? List.of(ContentChannel.INSTAGRAM.name())
                 : requestBody.channels();
         ContentItem created = contentService.createContent(storeId, requestBody.title(), requestBody.body(), channels);
+
+        if (requestBody.img_urls() != null && !requestBody.img_urls().isEmpty()) {
+            created = contentChannelPublishService.publishToChannels(storeId, created, requestBody.img_urls());
+        }
+
         return ResponseEntity.status(201).body(created);
     }
 
@@ -105,7 +119,8 @@ public class ContentController {
     public record CreateContentRequest(
             String title,
             String body,
-            List<String> channels
+            List<String> channels,
+            @JsonProperty("img_urls") List<String> img_urls
     ) {
     }
 

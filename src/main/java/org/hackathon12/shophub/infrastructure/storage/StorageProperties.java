@@ -14,7 +14,9 @@ public record StorageProperties(
             String bucket,
             String region,
             String publicBaseUrl,
-            String keyPrefix
+            String keyPrefix,
+            String accessKeyId,
+            String secretAccessKey
     ) {
     }
 }

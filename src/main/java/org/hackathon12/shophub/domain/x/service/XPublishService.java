@@ -50,8 +50,11 @@ public class XPublishService {
     }
 
     public InstagramPublishResult generateAndPublish(UUID storeId, List<String> imageUrls) {
+        return publishContent(storeId, selectBaseContent(storeId), imageUrls);
+    }
+
+    public InstagramPublishResult publishContent(UUID storeId, ContentItem content, List<String> imageUrls) {
         StoreProfile store = storeProfileService.getStore(storeId);
-        ContentItem baseContent = selectBaseContent(storeId);
 
         InstagramCaptionPrompt prompt = new InstagramCaptionPrompt(
                 store.name(),
@@ -59,8 +62,8 @@ public class XPublishService {
                 store.toneOfVoice(),
                 toBusinessHoursSummary(store.businessHours()),
                 toMenuSummary(store),
-                baseContent.title(),
-                baseContent.body()
+                content.title(),
+                content.body()
         );
         AiGeneratedText suggestion = aiTextGenerationService.suggestInstagramCaption(prompt);
         String tweetText = suggestion.text();

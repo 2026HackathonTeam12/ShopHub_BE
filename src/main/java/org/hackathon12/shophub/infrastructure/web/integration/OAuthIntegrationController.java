@@ -4,11 +4,11 @@ import org.hackathon12.shophub.domain.integration.model.OAuthConnectionStatus;
 import org.hackathon12.shophub.domain.integration.model.OAuthIntegrationType;
 import org.hackathon12.shophub.domain.integration.port.OAuthIntegrationProvider;
 import org.hackathon12.shophub.domain.integration.service.OAuthIntegrationService;
+import org.hackathon12.shophub.global.config.FrontendProperties;
 import org.hackathon12.shophub.infrastructure.mockmap.MockMapApiException;
 import org.hackathon12.shophub.infrastructure.x.XApiException;
 import org.hackathon12.shophub.infrastructure.web.auth.ShopHubAuthGuard;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -20,10 +20,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,13 +35,16 @@ public class OAuthIntegrationController {
 
     private final OAuthIntegrationService oauthIntegrationService;
     private final ShopHubAuthGuard shopHubAuthGuard;
+    private final FrontendProperties frontendProperties;
 
     public OAuthIntegrationController(
             OAuthIntegrationService oauthIntegrationService,
-            ShopHubAuthGuard shopHubAuthGuard
+            ShopHubAuthGuard shopHubAuthGuard,
+            FrontendProperties frontendProperties
     ) {
         this.oauthIntegrationService = oauthIntegrationService;
         this.shopHubAuthGuard = shopHubAuthGuard;
+        this.frontendProperties = frontendProperties;
     }
 
     @GetMapping("/oauth/status")
@@ -86,8 +91,19 @@ public class OAuthIntegrationController {
         response.sendRedirect(provider.buildAuthorizationUrl(storeId, userId));
     }
 
+    @GetMapping("/{type}/oauth/authorize-url")
+    public OAuthAuthorizeUrlResponse authorizeUrl(
+            @PathVariable String type,
+            @RequestParam UUID storeId,
+            HttpServletRequest request
+    ) {
+        OAuthIntegrationProvider provider = oauthIntegrationService.requireProvider(type);
+        UUID userId = shopHubAuthGuard.requireStoreMember(request, storeId);
+        return new OAuthAuthorizeUrlResponse(provider.buildAuthorizationUrl(storeId, userId));
+    }
+
     @GetMapping("/{type}/oauth/callback")
-    public ResponseEntity<String> callback(
+    public ResponseEntity<?> callback(
             @PathVariable String type,
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String state,
@@ -97,35 +113,21 @@ public class OAuthIntegrationController {
         OAuthIntegrationProvider provider = oauthIntegrationService.requireProvider(integrationType);
 
         if (StringUtils.hasText(error)) {
-            return htmlResponse(
-                    HttpStatus.BAD_REQUEST,
-                    integrationType.pathValue() + " OAuth 연결 실패",
+            return redirectToFrontend(
+                    integrationType.pathValue(),
+                    false,
                     integrationType.pathValue() + "에서 오류가 반환되었습니다: " + error
             );
         }
 
         try {
             OAuthConnectionStatus status = provider.completeAuthorization(code, state);
-            return htmlResponse(
-                    HttpStatus.OK,
-                    integrationType.pathValue() + " OAuth 연결 완료",
-                    "연동 타입: " + integrationType.pathValue() + "<br>"
-                            + "가게: " + status.placeName() + " (" + status.placeId() + ")<br>"
-                            + "Client ID: " + status.clientId() + "<br>"
-                            + "ShopHub BE가 이제 이 가게의 " + integrationType.pathValue() + " 답글 API를 사용할 수 있습니다."
-            );
+            String message = status.placeName() + " (" + status.placeId() + ") 연동이 완료되었습니다.";
+            return redirectToFrontend(integrationType.pathValue(), true, message);
         } catch (MockMapApiException exception) {
-            return htmlResponse(
-                    HttpStatus.BAD_REQUEST,
-                    integrationType.pathValue() + " OAuth 연결 실패",
-                    exception.getMessage()
-            );
+            return redirectToFrontend(integrationType.pathValue(), false, exception.getMessage());
         } catch (XApiException exception) {
-            return htmlResponse(
-                    HttpStatus.BAD_REQUEST,
-                    integrationType.pathValue() + " OAuth 연결 실패",
-                    exception.getMessage()
-            );
+            return redirectToFrontend(integrationType.pathValue(), false, exception.getMessage());
         }
     }
 
@@ -140,26 +142,36 @@ public class OAuthIntegrationController {
         return provider.disconnect(storeId, userId);
     }
 
-    private ResponseEntity<String> htmlResponse(HttpStatus status, String title, String message) {
-        String html = """
-                <!doctype html>
-                <html lang="ko">
-                <head>
-                  <meta charset="utf-8">
-                  <title>%s</title>
-                </head>
-                <body>
-                  <h1>%s</h1>
-                  <p>%s</p>
-                </body>
-                </html>
-                """.formatted(title, title, message);
-        return ResponseEntity.status(status).contentType(MediaType.TEXT_HTML).body(html);
+    private ResponseEntity<Void> redirectToFrontend(String type, boolean success, String message) {
+        if (!StringUtils.hasText(frontendProperties.baseUrl())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+        }
+
+        URI location = UriComponentsBuilder
+                .fromUriString(trimTrailingSlash(frontendProperties.baseUrl()))
+                .path("/integrations/oauth/callback")
+                .queryParam("type", type)
+                .queryParam("success", success)
+                .queryParam("message", message)
+                .build()
+                .encode()
+                .toUri();
+
+        return ResponseEntity.status(HttpStatus.FOUND).location(location).build();
+    }
+
+    private String trimTrailingSlash(String value) {
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     public record SaveCredentialsRequest(
             String clientId,
             String clientSecret
+    ) {
+    }
+
+    public record OAuthAuthorizeUrlResponse(
+            String authorizationUrl
     ) {
     }
 }

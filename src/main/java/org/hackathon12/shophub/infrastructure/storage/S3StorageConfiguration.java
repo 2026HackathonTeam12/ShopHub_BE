@@ -4,7 +4,10 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
@@ -21,7 +24,16 @@ public class S3StorageConfiguration {
 
         return S3Client.builder()
                 .region(Region.of(s3.region()))
-                .credentialsProvider(DefaultCredentialsProvider.create())
+                .credentialsProvider(resolveCredentialsProvider(s3))
                 .build();
+    }
+
+    private AwsCredentialsProvider resolveCredentialsProvider(StorageProperties.S3 s3) {
+        if (StringUtils.hasText(s3.accessKeyId()) && StringUtils.hasText(s3.secretAccessKey())) {
+            return StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(s3.accessKeyId(), s3.secretAccessKey())
+            );
+        }
+        return DefaultCredentialsProvider.create();
     }
 }

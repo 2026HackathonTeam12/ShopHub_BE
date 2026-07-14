@@ -98,6 +98,8 @@ facebook:
     allowed-page-name: ${FACEBOOK_GRAPH_ALLOWED_PAGE_NAME:}
 
 app:
+  frontend:
+    base-url: ${APP_FRONTEND_BASE_URL:http://localhost:5173}
   auth:
     session:
       store: ${APP_AUTH_SESSION_STORE:redis}
@@ -117,3 +119,5 @@ app:
       region: ${AWS_S3_REGION:ap-northeast-2}
       public-base-url: ${AWS_S3_PUBLIC_BASE_URL:}
       key-prefix: ${AWS_S3_KEY_PREFIX:shophub}
+      access-key-id: ${AWS_ACCESS_KEY_ID:}
+      secret-access-key: ${AWS_SECRET_ACCESS_KEY:}

@@ -31,6 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -1044,21 +1045,54 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void oauth_callback_without_code_returns_bad_request_html() throws Exception {
+    void oauth_callback_without_code_redirects_to_frontend() throws Exception {
         mockMvc.perform(get("/api/integrations/MOCK_MAP/oauth/callback")
                         .param("state", "invalid-state"))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("authorization code")));
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString(
+                        "http://localhost:5173/integrations/oauth/callback?type=MOCK_MAP&success=false"
+                )));
     }
 
     @Test
-    void oauth_callback_with_error_param_returns_bad_request_html() throws Exception {
+    void oauth_callback_with_error_param_redirects_to_frontend() throws Exception {
         mockMvc.perform(get("/api/integrations/MOCK_MAP/oauth/callback")
                         .param("error", "access_denied"))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.TEXT_HTML))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("access_denied")));
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString(
+                        "http://localhost:5173/integrations/oauth/callback?type=MOCK_MAP&success=false"
+                )))
+                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString("access_denied")));
+    }
+
+    @Test
+    void oauth_authorize_url_requires_credentials() throws Exception {
+        String isolatedStoreId = createIsolatedStore();
+
+        mockMvc.perform(authed(get("/api/integrations/MOCK_MAP/oauth/authorize-url").param("storeId", isolatedStoreId)))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("MOCK_MAP_API_ERROR"));
+    }
+
+    @Test
+    void oauth_authorize_url_returns_mockmap_url_when_credentials_exist() throws Exception {
+        mockMvc.perform(authed(put("/api/integrations/MOCK_MAP/oauth/credentials")
+                        .param("storeId", STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "clientId", "mock-client-" + UUID.randomUUID(),
+                                "clientSecret", "mock-secret-" + UUID.randomUUID()
+                        )))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(authed(get("/api/integrations/MOCK_MAP/oauth/authorize-url").param("storeId", STORE_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.authorizationUrl").value(org.hamcrest.Matchers.containsString(
+                        "/oauth/authorize/"
+                )))
+                .andExpect(jsonPath("$.authorizationUrl").value(org.hamcrest.Matchers.containsString(
+                        "redirect_uri=http://localhost:8080/api/integrations/MOCK_MAP/oauth/callback"
+                )));
     }
 
     @Test
@@ -1394,6 +1428,7 @@ class ShopHubApiIntegrationTest {
                 "DELETE /v1/reviews/{reviewId}/reply",
                 "DELETE /v1/stores/{storeId}/profile/menus/{menuId}",
                 "GET /api/integrations/oauth/status",
+                "GET /api/integrations/{type}/oauth/authorize-url",
                 "GET /api/integrations/{type}/oauth/callback",
                 "GET /api/integrations/{type}/oauth/start",
                 "GET /v1/auth/me",
