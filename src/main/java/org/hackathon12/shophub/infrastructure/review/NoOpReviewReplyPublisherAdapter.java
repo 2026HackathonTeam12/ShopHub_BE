@@ -11,4 +11,9 @@ public class NoOpReviewReplyPublisherAdapter implements ReviewReplyPublisherPort
     public void publishReply(StoreReview review, String replyContent) {
         // Intentionally no-op when external reply publishing is disabled.
     }
+
+    @Override
+    public void deleteReply(StoreReview review) {
+        // Intentionally no-op when external reply publishing is disabled.
+    }
 }

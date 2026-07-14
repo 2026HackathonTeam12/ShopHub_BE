@@ -81,12 +81,12 @@ public class StoreProfileService {
 
         StoreProfile updated = new StoreProfile(
                 current.id(),
-                name,
-                phone,
-                introduction,
-                address,
-                category,
-                toneOfVoice,
+                requiredText(name, "name"),
+                optionalText(phone),
+                optionalText(introduction),
+                requiredText(address, "address"),
+                requiredText(category, "category"),
+                requiredText(toneOfVoice, "toneOfVoice"),
                 current.businessHours(),
                 current.menuItems(),
                 current.googlePlaceId(),
@@ -142,6 +142,12 @@ public class StoreProfileService {
 
     public StoreProfile removeMenu(UUID storeId, UUID menuId) {
         StoreProfile current = getStore(storeId);
+        boolean menuExists = current.menuItems().stream()
+                .anyMatch(menu -> menu.id().equals(menuId));
+        if (!menuExists) {
+            throw new NotFoundException("메뉴를 찾을 수 없습니다. menuId=" + menuId);
+        }
+
         List<MenuItem> nextMenus = current.menuItems().stream()
                 .filter(menu -> !menu.id().equals(menuId))
                 .toList();

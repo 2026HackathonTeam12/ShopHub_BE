@@ -8,6 +8,12 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:shophub}
     password: ${SPRING_DATASOURCE_PASSWORD:shophub}
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:2s}
   jpa:
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
@@ -29,6 +35,11 @@ mock-map:
     authorize-path: ${MOCK_MAP_OAUTH_AUTHORIZE_PATH:/oauth/authorize/}
     revoke-path: ${MOCK_MAP_OAUTH_REVOKE_PATH:/oauth/revoke/}
     token-store-path: ${MOCK_MAP_OAUTH_TOKEN_STORE_PATH:./.mockmap-oauth-store.json}
+    cache:
+      store: ${MOCK_MAP_OAUTH_CACHE_STORE:redis}
+      pending-state-ttl-seconds: ${MOCK_MAP_OAUTH_PENDING_STATE_TTL_SECONDS:600}
+      pending-state-key-prefix: ${MOCK_MAP_OAUTH_PENDING_STATE_KEY_PREFIX:shophub:mockmap:oauth:pending-state:}
+      access-token-key-prefix: ${MOCK_MAP_OAUTH_ACCESS_TOKEN_KEY_PREFIX:shophub:mockmap:oauth:access-token:}
 
 openai:
   api-key: ${OPENAI_API_KEY:}
@@ -47,6 +58,11 @@ instagram:
     interval-ms: ${INSTAGRAM_GRAPH_INTERVAL_MS:2000}
 
 app:
+  auth:
+    session:
+      store: ${APP_AUTH_SESSION_STORE:redis}
+      ttl-hours: ${APP_AUTH_SESSION_TTL_HOURS:24}
+      key-prefix: ${APP_AUTH_SESSION_KEY_PREFIX:shophub:auth:session:}
   review-source:
     provider: ${APP_REVIEW_SOURCE_PROVIDER:mockmap}
   review-sync:

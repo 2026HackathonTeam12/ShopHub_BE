@@ -7,17 +7,24 @@ import org.hackathon12.shophub.domain.dashboard.model.DashboardOverview;
 import org.hackathon12.shophub.domain.review.model.StoreReview;
 import org.hackathon12.shophub.domain.review.model.StoreReviewSummary;
 import org.hackathon12.shophub.domain.review.service.StoreReviewService;
+import org.hackathon12.shophub.domain.store.model.BusinessHour;
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
 import org.hackathon12.shophub.domain.store.service.StoreProfileService;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
 @Service
 public class DashboardService {
+
+    private static final int MAX_DRAFT_CHAR_COUNT = 2200;
+    private static final List<String> DEFAULT_CHANNELS = List.of("Instagram", "네이버 플레이스", "Google Business");
 
     private final StoreProfileService storeProfileService;
     private final ContentService contentService;
@@ -35,24 +42,27 @@ public class DashboardService {
 
     public DashboardOverview getOverview(UUID storeId) {
         StoreProfile store = storeProfileService.getStore(storeId);
-        ContentItem draft = contentService.getContents(storeId, ContentStatus.DRAFT).stream()
-                .findFirst()
-                .orElse(new ContentItem(
-                        UUID.randomUUID(),
-                        storeId,
-                        "오늘의 추천 메뉴",
-                        "비 오는 날엔 따뜻한 커피와 디저트를 함께 소개해보세요.",
-                        List.of("Instagram", "네이버 플레이스", "Google Business"),
-                        ContentStatus.DRAFT,
-                        Instant.now()
-                ));
+        List<ContentItem> contents = contentService.getContents(storeId, null);
+        List<StoreReview> reviews = storeReviewService.getReviews(storeId, null);
+
+        ContentItem latestDraft = contents.stream()
+                .filter(item -> item.status() == ContentStatus.DRAFT)
+                .max(Comparator.comparing(ContentItem::updatedAt))
+                .orElse(null);
+
+        DashboardOverview.DraftContent draftContent = latestDraft == null
+                ? new DashboardOverview.DraftContent("", "", 0, MAX_DRAFT_CHAR_COUNT, DEFAULT_CHANNELS)
+                : new DashboardOverview.DraftContent(
+                        latestDraft.title(),
+                        latestDraft.body(),
+                        latestDraft.body().length(),
+                        MAX_DRAFT_CHAR_COUNT,
+                        latestDraft.channels()
+                );
 
         StoreReviewSummary summary = storeReviewService.getSummary(storeId);
-        List<StoreReview> reviews = storeReviewService.getReviews(storeId, null).stream()
-                .limit(2)
-                .toList();
-
         List<DashboardOverview.RecentReviewItem> recent = reviews.stream()
+                .limit(2)
                 .map(review -> new DashboardOverview.RecentReviewItem(
                         review.id(),
                         review.authorName(),
@@ -65,31 +75,73 @@ public class DashboardService {
         return new DashboardOverview(
                 storeId,
                 store.name(),
-                new DashboardOverview.DraftContent(
-                        draft.title(),
-                        draft.body(),
-                        draft.body().length(),
-                        2200,
-                        draft.channels()
-                ),
-                new DashboardOverview.SuggestionCard(
-                        "오늘의 운영 제안",
-                        "비 오는 오후, 따뜻한 한 잔 콘텐츠를 지금 올려보세요.",
-                        "이 주제로 콘텐츠 만들기"
-                ),
+                draftContent,
+                buildSuggestionCard(latestDraft),
                 new DashboardOverview.ReviewWidget(
-                        summary.totalReviewCount(),
-                        summary.syncedReviewCount(),
+                        summary.externalTotalReviewCount(),
+                        summary.localSyncedReviewCount(),
                         "/v1/stores/" + storeId + "/reviews"
                 ),
-                List.of(
-                        new DashboardOverview.ChecklistItem("check-hours", "오늘 영업시간 확인", true),
-                        new DashboardOverview.ChecklistItem("reply-review", "최근 MockMap 리뷰에 답글 달기", false),
-                        new DashboardOverview.ChecklistItem("publish-content", "오늘의 게시물 발행하기", false)
-                ),
+                buildChecklist(store, contents, reviews),
                 recent,
                 Instant.now()
         );
+    }
+
+    private DashboardOverview.SuggestionCard buildSuggestionCard(ContentItem latestDraft) {
+        if (latestDraft == null) {
+            return new DashboardOverview.SuggestionCard(
+                    "오늘의 운영 제안",
+                    "아직 작성 중인 초안이 없습니다. 오늘의 메뉴나 이벤트로 콘텐츠를 시작해 보세요.",
+                    "이 주제로 콘텐츠 만들기"
+            );
+        }
+        return new DashboardOverview.SuggestionCard(
+                "오늘의 운영 제안",
+                "작성 중인 초안이 있습니다. 지금 검토하고 게시해 보세요.",
+                "초안 이어서 작성하기"
+        );
+    }
+
+    private List<DashboardOverview.ChecklistItem> buildChecklist(
+            StoreProfile store,
+            List<ContentItem> contents,
+            List<StoreReview> reviews
+    ) {
+        boolean hoursConfigured = isTodayOpen(store.businessHours());
+        boolean replyReviewCompleted = reviews.stream()
+                .noneMatch(review -> !StringUtils.hasText(review.reply()));
+        boolean publishContentCompleted = contents.stream()
+                .anyMatch(content -> content.status() == ContentStatus.PUBLISHED
+                        && Duration.between(content.updatedAt(), Instant.now()).toHours() < 24);
+
+        return List.of(
+                new DashboardOverview.ChecklistItem("check-hours", "오늘 영업시간 확인", hoursConfigured),
+                new DashboardOverview.ChecklistItem("reply-review", "최근 MockMap 리뷰에 답글 달기", replyReviewCompleted),
+                new DashboardOverview.ChecklistItem("publish-content", "오늘의 게시물 발행하기", publishContentCompleted)
+        );
+    }
+
+    private boolean isTodayOpen(List<BusinessHour> businessHours) {
+        if (businessHours == null || businessHours.isEmpty()) {
+            return false;
+        }
+
+        String today = toDayCode(DayOfWeek.from(java.time.LocalDate.now()));
+        return businessHours.stream()
+                .anyMatch(hour -> today.equals(hour.dayOfWeek()) && hour.open());
+    }
+
+    private String toDayCode(DayOfWeek dayOfWeek) {
+        return switch (dayOfWeek) {
+            case MONDAY -> "MON";
+            case TUESDAY -> "TUE";
+            case WEDNESDAY -> "WED";
+            case THURSDAY -> "THU";
+            case FRIDAY -> "FRI";
+            case SATURDAY -> "SAT";
+            case SUNDAY -> "SUN";
+        };
     }
 
     private String toAgeLabel(Instant reviewedAt) {

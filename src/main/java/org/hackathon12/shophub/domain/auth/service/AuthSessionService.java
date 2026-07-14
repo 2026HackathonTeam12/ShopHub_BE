@@ -1,20 +1,25 @@
 package org.hackathon12.shophub.domain.auth.service;
 
+import org.hackathon12.shophub.domain.auth.port.AuthSessionStore;
+import org.hackathon12.shophub.global.config.AuthSessionProperties;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class AuthSessionService {
 
-    private final Map<String, SessionEntry> sessions = new ConcurrentHashMap<>();
+    private final AuthSessionStore authSessionStore;
+    private final AuthSessionProperties authSessionProperties;
+
+    public AuthSessionService(AuthSessionStore authSessionStore, AuthSessionProperties authSessionProperties) {
+        this.authSessionStore = authSessionStore;
+        this.authSessionProperties = authSessionProperties;
+    }
 
     public String issueToken(UUID userId) {
         String token = UUID.randomUUID().toString();
-        sessions.put(token, new SessionEntry(userId, Instant.now().plusSeconds(60L * 60L * 24L)));
+        authSessionStore.save(token, userId, authSessionProperties.ttl());
         return token;
     }
 
@@ -22,15 +27,13 @@ public class AuthSessionService {
         if (accessToken == null || accessToken.isBlank()) {
             return null;
         }
-
-        SessionEntry entry = sessions.get(accessToken);
-        if (entry == null || Instant.now().isAfter(entry.expiresAt())) {
-            sessions.remove(accessToken);
-            return null;
-        }
-        return entry.userId();
+        return authSessionStore.findUserId(accessToken).orElse(null);
     }
 
-    private record SessionEntry(UUID userId, Instant expiresAt) {
+    public void revokeToken(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return;
+        }
+        authSessionStore.delete(accessToken);
     }
 }

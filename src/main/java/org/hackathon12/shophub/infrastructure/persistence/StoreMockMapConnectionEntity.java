@@ -58,6 +58,10 @@ public class StoreMockMapConnectionEntity {
     protected StoreMockMapConnectionEntity() {
     }
 
+    private static String nullableText(String value) {
+        return value == null ? "" : value;
+    }
+
     public static StoreMockMapConnectionEntity of(
             UUID id,
             StoreProfileEntity store,
@@ -75,9 +79,9 @@ public class StoreMockMapConnectionEntity {
         entity.connectedByUser = connectedByUser;
         entity.clientId = clientId;
         entity.clientSecret = clientSecret;
-        entity.refreshToken = refreshToken;
-        entity.placeId = placeId;
-        entity.placeName = placeName;
+        entity.refreshToken = nullableText(refreshToken);
+        entity.placeId = nullableText(placeId);
+        entity.placeName = nullableText(placeName);
         entity.updatedAt = updatedAt;
         return entity;
     }
@@ -117,9 +121,9 @@ public class StoreMockMapConnectionEntity {
     public void updateCredentials(String clientId, String clientSecret, Instant updatedAt) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
-        this.refreshToken = null;
-        this.placeId = null;
-        this.placeName = null;
+        this.refreshToken = "";
+        this.placeId = "";
+        this.placeName = "";
         this.updatedAt = updatedAt;
     }
 
@@ -133,9 +137,9 @@ public class StoreMockMapConnectionEntity {
     ) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
-        this.refreshToken = refreshToken;
-        this.placeId = placeId;
-        this.placeName = placeName;
+        this.refreshToken = nullableText(refreshToken);
+        this.placeId = nullableText(placeId);
+        this.placeName = nullableText(placeName);
         this.updatedAt = updatedAt;
     }
 }

@@ -1,10 +1,16 @@
 openapi: 3.0.3
 info:
   title: ShopHub API
-  version: 0.2.0
+  version: 0.2.1
   description: |
     현재 코드 기준 API 명세서.
     패키지 구조(domain/global/infrastructure)에 맞춰 구현된 REST API를 기술한다.
+
+    ## 인증
+    대부분의 API는 `POST /v1/auth/login` 또는 `POST /v1/auth/signup` 으로 발급받은
+    `accessToken`을 `Authorization: Bearer {accessToken}` 헤더에 담아 호출한다.
+    인증이 필요한 API에 토큰 없이 요청하면 `401 UNAUTHORIZED`가 반환된다.
+    가게 멤버십이 필요한 API에서 권한이 없으면 `403 FORBIDDEN`이 반환된다.
 servers:
   - url: http://localhost:8080
     description: local
@@ -16,6 +22,10 @@ tags:
   - name: Store Profile
   - name: Reviews
   - name: Review Inbox
+  - name: MockMap OAuth
+
+security:
+  - BearerAuth: []
 
 paths:
   /v1/auth/signup:
@@ -23,6 +33,7 @@ paths:
       tags: [Auth]
       summary: 회원가입
       operationId: signUp
+      security: []
       requestBody:
         required: true
         content:
@@ -44,6 +55,7 @@ paths:
       tags: [Auth]
       summary: 로그인
       operationId: login
+      security: []
       requestBody:
         required: true
         content:
@@ -59,12 +71,35 @@ paths:
                 $ref: '#/components/schemas/AuthResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      description: |
+        현재 Bearer 토큰을 무효화합니다.
+        Swagger에서 Authorize 후 호출하는 것을 권장합니다.
+      operationId: logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+      responses:
+        '204':
+          description: 로그아웃 성공
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/stores:
     get:
       tags: [Store Profile]
       summary: 가게 목록 조회
+      description: 로그인한 사용자가 소속된 가게만 반환합니다.
       operationId: getStores
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
       responses:
         '200':
           description: 조회 성공
@@ -74,23 +109,61 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/StoreProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Store Profile]
       summary: 가게 생성
       description: |
-        프론트 온보딩 호환 필드를 함께 지원한다.
+        로그인한 사용자를 해당 가게의 OWNER 멤버로 자동 등록합니다.
+
+        **필수 필드**
+        - `name`, `category`
+        - `address` 또는 `neighborhood` (둘 중 하나)
+        - `toneOfVoice` 또는 `tone` (둘 중 하나)
+
+        **프론트 온보딩 호환 alias**
         - 소개: `introduction` 또는 `description`
         - 주소: `address` 또는 `neighborhood`
         - 말투: `toneOfVoice` 또는 `tone`
         - 메뉴: `menuItems` 또는 `menu`
         - 영업시간: `businessHours` 또는 `hours`(예: `매일 11:00 - 21:00`)
       operationId: createStore
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateStoreRequest'
+            examples:
+              minimal:
+                summary: 최소 필수값
+                value:
+                  name: 모모커피 연남
+                  category: 카페 · 디저트
+                  address: 서울 마포구 동교로 242
+                  toneOfVoice: 따뜻하고 담백한
+              onboarding:
+                summary: 프론트 온보딩 스타일
+                value:
+                  name: 모모커피 연남
+                  phone: "02-335-0426"
+                  description: 연남동 골목 카페
+                  address: 서울 마포구 동교로 242
+                  category: 카페 · 디저트
+                  tone: 따뜻하고 담백한 동네 카페 말투
+                  hours: "매일 11:00 - 21:00"
+                  menu:
+                    - 모모 라떼
+                    - 버터 취향시에
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '201':
           description: 생성 성공
@@ -100,6 +173,10 @@ paths:
                 $ref: '#/components/schemas/StoreProfile'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/stores/{storeId}/dashboard:
     get:
@@ -107,6 +184,7 @@ paths:
       summary: 대시보드 조회
       operationId: getDashboardOverview
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
       responses:
         '200':
@@ -117,6 +195,10 @@ paths:
                 $ref: '#/components/schemas/DashboardOverview'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/stores/{storeId}/contents:
     get:
@@ -124,12 +206,17 @@ paths:
       summary: 콘텐츠 목록 조회
       operationId: getContents
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
         - in: query
           name: status
           required: false
           schema:
             $ref: '#/components/schemas/ContentStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 조회 성공
@@ -139,11 +226,16 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ContentItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       tags: [Content]
       summary: 콘텐츠 생성 또는 AI 양식 추천
       operationId: createContent
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
       requestBody:
         required: true
@@ -151,6 +243,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateContentRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: AI 양식 추천 성공 (aiSuggest=true)
@@ -174,6 +270,7 @@ paths:
       description: 경로의 `storeId`와 콘텐츠 소유 매장이 다르면 404를 반환한다.
       operationId: retryContent
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
         - $ref: '#/components/parameters/ContentId'
       responses:
@@ -185,6 +282,10 @@ paths:
                 $ref: '#/components/schemas/ContentItem'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/stores/{storeId}/contents/{contentId}/status:
     patch:
@@ -193,6 +294,7 @@ paths:
       description: 경로의 `storeId`와 콘텐츠 소유 매장이 다르면 404를 반환한다.
       operationId: changeContentStatus
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
         - $ref: '#/components/parameters/ContentId'
       requestBody:
@@ -201,6 +303,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ChangeContentStatusRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 변경 성공
@@ -222,6 +328,7 @@ paths:
         - 2장 이상이면 캐러셀 게시
       operationId: publishInstagramCarousel
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
       requestBody:
         required: true
@@ -237,6 +344,10 @@ paths:
                   items:
                     type: string
                     format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 게시 성공
@@ -255,6 +366,7 @@ paths:
       summary: 가게 프로필 조회
       operationId: getStoreProfile
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
       responses:
         '200':
@@ -265,6 +377,10 @@ paths:
                 $ref: '#/components/schemas/StoreProfile'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/stores/{storeId}/profile/basic:
     put:
@@ -272,6 +388,7 @@ paths:
       summary: 가게 기본 정보 수정
       operationId: updateStoreBasicProfile
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
       requestBody:
         required: true
@@ -279,6 +396,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateBasicRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 수정 성공
@@ -295,6 +416,7 @@ paths:
       summary: 영업시간 수정
       operationId: updateStoreHours
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
       requestBody:
         required: true
@@ -302,6 +424,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/UpdateHoursRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 수정 성공
@@ -318,6 +444,7 @@ paths:
       summary: 메뉴 추가
       operationId: addStoreMenu
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
       requestBody:
         required: true
@@ -325,6 +452,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AddMenuRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 추가 성공
@@ -341,6 +472,7 @@ paths:
       summary: 메뉴 삭제
       operationId: removeStoreMenu
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
         - $ref: '#/components/parameters/MenuId'
       responses:
@@ -352,6 +484,10 @@ paths:
                 $ref: '#/components/schemas/StoreProfile'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/stores/{storeId}/reviews/summary:
     get:
@@ -359,6 +495,7 @@ paths:
       summary: 리뷰 요약 조회
       operationId: getStoreReviewSummary
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
       responses:
         '200':
@@ -369,6 +506,10 @@ paths:
                 $ref: '#/components/schemas/StoreReviewSummary'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/stores/{storeId}/reviews:
     get:
@@ -376,12 +517,17 @@ paths:
       summary: 리뷰 목록 조회
       operationId: getStoreReviews
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
         - in: query
           name: keyword
           required: false
           schema:
             type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 조회 성공
@@ -392,22 +538,20 @@ paths:
                 items:
                   $ref: '#/components/schemas/StoreReview'
 
-  /v1/stores/{storeId}/reviews/sync-google:
+  /v1/stores/{storeId}/reviews/sync-mockmap:
     post:
       tags: [Reviews]
-      summary: Google 리뷰 동기화
-      operationId: syncGoogleReviews
+      summary: MockMap 리뷰 동기화
+      description: |
+        MockMap `GET /api/reviews/?place_id=` API에서 리뷰를 가져와 upsert합니다.
+        cron(`app.review-sync`)으로도 주기적으로 동기화됩니다.
+      operationId: syncMockMapReviews
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/StoreId'
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SyncGoogleReviewsRequest'
       responses:
         '202':
-          description: 동기화 시작/완료
+          description: 동기화 완료
           content:
             application/json:
               schema:
@@ -416,6 +560,10 @@ paths:
                   $ref: '#/components/schemas/StoreReview'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '502':
@@ -427,6 +575,7 @@ paths:
       summary: 리뷰 답글 AI 초안 생성
       operationId: createReviewAiDraft
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/ReviewId'
       responses:
         '200':
@@ -437,6 +586,10 @@ paths:
                 $ref: '#/components/schemas/AiDraftResponse'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/reviews/{reviewId}/ai-auto-reply:
     post:
@@ -444,6 +597,7 @@ paths:
       summary: 리뷰 AI 답글 자동 생성 후 저장
       operationId: autoReplyReviewWithAi
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/ReviewId'
       responses:
         '200':
@@ -454,6 +608,10 @@ paths:
                 $ref: '#/components/schemas/StoreReview'
         '404':
           $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /v1/reviews/{reviewId}/reply:
     post:
@@ -461,6 +619,7 @@ paths:
       summary: 리뷰 답글 등록
       operationId: replyReview
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - $ref: '#/components/parameters/ReviewId'
       requestBody:
         required: true
@@ -468,6 +627,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ReplyRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 등록 성공
@@ -475,6 +638,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StoreReview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Reviews]
+      summary: 리뷰 답글 삭제
+      description: ShopHub DB의 답글을 삭제하고, MockMap에 연동된 경우 외부 답글도 함께 삭제를 시도합니다.
+      operationId: deleteReviewReply
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/ReviewId'
+      responses:
+        '200':
+          description: 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoreReview'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -484,10 +676,11 @@ paths:
       summary: Place ID 기반 통합 리뷰 Inbox 조회
       operationId: getReviewInbox
       parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
         - in: query
           name: placeIds
           required: true
-          description: Google Place ID 목록 (복수 전달 가능)
+          description: MockMap place_id 목록 (복수 전달 가능). MockMap `GET /api/reviews/?place_id=` 와 동일합니다.
           schema:
             type: array
             items:
@@ -495,6 +688,10 @@ paths:
             minItems: 1
           style: form
           explode: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
       responses:
         '200':
           description: 조회 성공
@@ -507,8 +704,191 @@ paths:
         '502':
           $ref: '#/components/responses/BadGateway'
 
+  /api/integrations/mockmap/oauth/credentials:
+    put:
+      tags: [MockMap OAuth]
+      summary: MockMap OAuth Client Credentials 등록
+      description: |
+        MockMap에서 발급받은 `clientId`, `clientSecret`을 가게별로 저장합니다.
+        이후 OAuth start 및 리뷰 답글 외부 발행에 사용됩니다.
+      operationId: saveMockMapCredentials
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/StoreIdQuery'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MockMapSaveCredentialsRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      responses:
+        '200':
+          description: 저장 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockMapOAuthConnectionStatus'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [MockMap OAuth]
+      summary: MockMap OAuth Client Credentials 삭제
+      operationId: deleteMockMapCredentials
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/StoreIdQuery'
+      responses:
+        '200':
+          description: 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockMapOAuthConnectionStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/integrations/mockmap/oauth/start:
+    get:
+      tags: [MockMap OAuth]
+      summary: MockMap OAuth 인증 시작 (리다이렉트)
+      description: |
+        MockMap OAuth authorize URL로 `302` 리다이렉트합니다.
+        **브라우저 주소창에 직접 URL을 입력하면 Authorization 헤더가 없어 401이 발생할 수 있습니다.**
+        curl `-i`로 `Location` 헤더를 받아 해당 URL을 브라우저에서 여는 방식을 권장합니다.
+      operationId: startMockMapOAuth
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/StoreIdQuery'
+      responses:
+        '302':
+          description: MockMap OAuth authorize URL로 리다이렉트
+          headers:
+            Location:
+              description: MockMap OAuth authorize URL
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/integrations/mockmap/oauth/callback:
+    get:
+      tags: [MockMap OAuth]
+      summary: MockMap OAuth 콜백 (공개)
+      description: MockMap이 authorization code를 전달하는 콜백 엔드포인트입니다. HTML 응답을 반환합니다.
+      operationId: mockMapOAuthCallback
+      security: []
+      parameters:
+        - in: query
+          name: code
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: state
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: error
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 연결 완료 (HTML)
+          content:
+            text/html:
+              schema:
+                type: string
+        '400':
+          description: 연결 실패 (HTML)
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /api/integrations/mockmap/oauth/status:
+    get:
+      tags: [MockMap OAuth]
+      summary: MockMap OAuth 연동 상태 조회
+      operationId: getMockMapOAuthStatus
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/StoreIdQuery'
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockMapOAuthConnectionStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/integrations/mockmap/oauth/disconnect:
+    post:
+      tags: [MockMap OAuth]
+      summary: MockMap OAuth 연결 해제
+      operationId: disconnectMockMapOAuth
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/StoreIdQuery'
+      responses:
+        '200':
+          description: 해제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockMapOAuthConnectionStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: accessToken
+      description: |
+        `POST /v1/auth/login` 또는 `POST /v1/auth/signup` 응답의 `accessToken` 값.
+        요청 헤더: `Authorization: Bearer {accessToken}`
+
   parameters:
+    AuthorizationHeader:
+      in: header
+      name: Authorization
+      required: true
+      description: |
+        인증 토큰. `POST /v1/auth/login` 또는 `POST /v1/auth/signup` 응답의 `accessToken`을
+        `Bearer {accessToken}` 형식으로 전달합니다.
+      schema:
+        type: string
+      example: Bearer cab520ff-eea5-46b4-bcc2-a2a4eea58f78
+    StoreIdQuery:
+      in: query
+      name: storeId
+      required: true
+      description: 대상 가게 ID
+      schema:
+        type: string
+        format: uuid
     StoreId:
       in: path
       name: storeId
@@ -545,6 +925,18 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
+    Unauthorized:
+      description: 인증 필요 또는 인증 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Forbidden:
+      description: 접근 권한 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
     NotFound:
       description: 리소스를 찾을 수 없음
       content:
@@ -552,13 +944,46 @@ components:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
     BadGateway:
-      description: 외부 API 연동 오류 (Google Places)
+      description: MockMap API 연동 오류
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
 
   schemas:
+    MockMapSaveCredentialsRequest:
+      type: object
+      required: [clientId, clientSecret]
+      properties:
+        clientId:
+          type: string
+          description: MockMap OAuth client ID (oci_ prefix)
+        clientSecret:
+          type: string
+          description: MockMap OAuth client secret (ocs_ prefix)
+
+    MockMapOAuthConnectionStatus:
+      type: object
+      required: [credentialsConfigured, connected, clientId, placeId, placeName, updatedAt]
+      properties:
+        credentialsConfigured:
+          type: boolean
+        connected:
+          type: boolean
+        clientId:
+          type: string
+          nullable: true
+        placeId:
+          type: string
+          nullable: true
+        placeName:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
     SignUpRequest:
       type: object
       required: [email, password, name]

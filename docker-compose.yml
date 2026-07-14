@@ -19,5 +19,21 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:${REDIS_IMAGE_TAG:-7.4-alpine}
+    container_name: shophub-redis
+    restart: unless-stopped
+    command: [ "redis-server", "--appendonly", "yes" ]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - shophub_redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   shophub_mysql_data:
+  shophub_redis_data:

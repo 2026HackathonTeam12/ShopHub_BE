@@ -14,12 +14,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class ContentService {
+
+    private static final Map<ContentStatus, EnumSet<ContentStatus>> ALLOWED_TRANSITIONS = Map.of(
+            ContentStatus.DRAFT, EnumSet.of(ContentStatus.SCHEDULED, ContentStatus.PUBLISHED),
+            ContentStatus.SCHEDULED, EnumSet.of(ContentStatus.DRAFT, ContentStatus.PUBLISHED),
+            ContentStatus.FAILED, EnumSet.of(ContentStatus.DRAFT),
+            ContentStatus.PUBLISHED, EnumSet.noneOf(ContentStatus.class)
+    );
 
     private final ContentPort contentPort;
     private final StoreProfileService storeProfileService;
@@ -80,6 +89,12 @@ public class ContentService {
             throw new NotFoundException("콘텐츠를 찾을 수 없습니다. contentId=" + contentId);
         }
         ensureContentOwnedByStore(current, storeId);
+        if (current.status() != ContentStatus.FAILED) {
+            throw new IllegalArgumentException(
+                    "retry는 FAILED 상태의 콘텐츠만 가능합니다. currentStatus=" + current.status()
+            );
+        }
+        validateStatusTransition(current.status(), ContentStatus.DRAFT);
 
         ContentItem retried = new ContentItem(
                 current.id(),
@@ -99,6 +114,7 @@ public class ContentService {
             throw new NotFoundException("콘텐츠를 찾을 수 없습니다. contentId=" + contentId);
         }
         ensureContentOwnedByStore(current, storeId);
+        validateStatusTransition(current.status(), status);
 
         ContentItem updated = new ContentItem(
                 current.id(),
@@ -115,6 +131,22 @@ public class ContentService {
     private void ensureContentOwnedByStore(ContentItem contentItem, UUID storeId) {
         if (!contentItem.storeId().equals(storeId)) {
             throw new NotFoundException("콘텐츠를 찾을 수 없습니다. storeId=" + storeId + ", contentId=" + contentItem.id());
+        }
+    }
+
+    private void validateStatusTransition(ContentStatus currentStatus, ContentStatus nextStatus) {
+        if (currentStatus == nextStatus) {
+            return;
+        }
+
+        EnumSet<ContentStatus> allowedNextStatuses = ALLOWED_TRANSITIONS.getOrDefault(
+                currentStatus,
+                EnumSet.noneOf(ContentStatus.class)
+        );
+        if (!allowedNextStatuses.contains(nextStatus)) {
+            throw new IllegalArgumentException(
+                    "허용되지 않는 콘텐츠 상태 전이입니다. currentStatus=" + currentStatus + ", nextStatus=" + nextStatus
+            );
         }
     }
 

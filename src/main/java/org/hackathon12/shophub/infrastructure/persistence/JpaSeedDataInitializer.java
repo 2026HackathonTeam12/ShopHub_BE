@@ -9,6 +9,7 @@ import org.hackathon12.shophub.domain.store.model.MenuItem;
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,19 +27,22 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
     private final ContentItemJpaRepository contentItemJpaRepository;
     private final StoreReviewJpaRepository storeReviewJpaRepository;
     private final UserStoreMembershipJpaRepository userStoreMembershipJpaRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public JpaSeedDataInitializer(
             StoreProfileJpaRepository storeProfileJpaRepository,
             UserAccountJpaRepository userAccountJpaRepository,
             ContentItemJpaRepository contentItemJpaRepository,
             StoreReviewJpaRepository storeReviewJpaRepository,
-            UserStoreMembershipJpaRepository userStoreMembershipJpaRepository
+            UserStoreMembershipJpaRepository userStoreMembershipJpaRepository,
+            PasswordEncoder passwordEncoder
     ) {
         this.storeProfileJpaRepository = storeProfileJpaRepository;
         this.userAccountJpaRepository = userAccountJpaRepository;
         this.contentItemJpaRepository = contentItemJpaRepository;
         this.storeReviewJpaRepository = storeReviewJpaRepository;
         this.userStoreMembershipJpaRepository = userStoreMembershipJpaRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -79,7 +83,7 @@ public class JpaSeedDataInitializer implements ApplicationRunner {
         UserAccount user = new UserAccount(
                 UUID.fromString("f833ee9d-ee1c-4f44-ab8f-6f5b6f61f3f2"),
                 "name@business.kr",
-                "Passw0rd!",
+                passwordEncoder.encode("Passw0rd!"),
                 "모모커피 운영자"
         );
         UserAccountEntity savedUser = userAccountJpaRepository.save(UserAccountEntity.fromDomain(user));

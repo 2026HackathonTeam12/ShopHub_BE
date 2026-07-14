@@ -16,10 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class MockMapOwnerOAuthService {
@@ -30,19 +29,20 @@ public class MockMapOwnerOAuthService {
     private final MockMapApiClient mockMapApiClient;
     private final MockMapApiProperties apiProperties;
     private final MockMapOAuthProperties properties;
+    private final MockMapOAuthCacheProperties cacheProperties;
+    private final MockMapOAuthStateStore oauthStateStore;
     private final MockMapOAuthTokenStore legacyTokenStore;
     private final StoreMockMapConnectionJpaRepository connectionRepository;
     private final StoreProfileJpaRepository storeProfileRepository;
     private final UserAccountJpaRepository userAccountRepository;
     private final StoreMembershipService storeMembershipService;
 
-    private final Map<String, PendingAuthorization> pendingStates = new ConcurrentHashMap<>();
-    private final Map<UUID, CachedAccessToken> cachedAccessTokens = new ConcurrentHashMap<>();
-
     public MockMapOwnerOAuthService(
             MockMapApiClient mockMapApiClient,
             MockMapApiProperties apiProperties,
             MockMapOAuthProperties properties,
+            MockMapOAuthCacheProperties cacheProperties,
+            MockMapOAuthStateStore oauthStateStore,
             MockMapOAuthTokenStore legacyTokenStore,
             StoreMockMapConnectionJpaRepository connectionRepository,
             StoreProfileJpaRepository storeProfileRepository,
@@ -52,6 +52,8 @@ public class MockMapOwnerOAuthService {
         this.mockMapApiClient = mockMapApiClient;
         this.apiProperties = apiProperties;
         this.properties = properties;
+        this.cacheProperties = cacheProperties;
+        this.oauthStateStore = oauthStateStore;
         this.legacyTokenStore = legacyTokenStore;
         this.connectionRepository = connectionRepository;
         this.storeProfileRepository = storeProfileRepository;
@@ -92,7 +94,7 @@ public class MockMapOwnerOAuthService {
             connection.updateCredentials(clientId.trim(), clientSecret.trim(), now);
         }
 
-        cachedAccessTokens.remove(storeId);
+        oauthStateStore.deleteAccessToken(storeId);
         return getConnectionStatus(storeId);
     }
 
@@ -104,7 +106,7 @@ public class MockMapOwnerOAuthService {
         if (connection != null) {
             revokeIfConnected(connection);
             connectionRepository.delete(connection);
-            cachedAccessTokens.remove(storeId);
+            oauthStateStore.deleteAccessToken(storeId);
         }
         return getConnectionStatus(storeId);
     }
@@ -114,9 +116,13 @@ public class MockMapOwnerOAuthService {
         storeMembershipService.requireMembership(userId, storeId);
         StoreMockMapConnectionEntity connection = requireStoreCredentials(storeId);
 
-        cleanupExpiredStates();
         String state = UUID.randomUUID().toString();
-        pendingStates.put(state, new PendingAuthorization(storeId, userId, Instant.now().plusSeconds(600)));
+        oauthStateStore.savePendingState(
+                state,
+                storeId,
+                userId,
+                pendingStateTtl()
+        );
 
         return UriComponentsBuilder
                 .fromUriString(apiProperties.baseUrl())
@@ -137,7 +143,7 @@ public class MockMapOwnerOAuthService {
             throw new MockMapApiException("MockMap OAuth callback에 authorization code가 없습니다.");
         }
 
-        PendingAuthorization pending = validateState(state);
+        MockMapOAuthPendingState pending = validateState(state);
         storeMembershipService.requireMembership(pending.userId(), pending.storeId());
         StoreMockMapConnectionEntity connection = requireStoreCredentials(pending.storeId());
 
@@ -149,22 +155,12 @@ public class MockMapOwnerOAuthService {
                 state
         );
         persistStoreConnection(pending.storeId(), pending.userId(), connection, tokenResponse);
-        pendingStates.remove(state);
         return getConnectionStatus(pending.storeId());
     }
 
     public synchronized String getAccessToken(UUID storeId) {
-        CachedAccessToken cached = cachedAccessTokens.get(storeId);
-        if (cached != null && Instant.now().isBefore(cached.expiresAt())) {
-            return cached.accessToken();
-        }
-
-        StoreMockMapConnectionEntity connection = connectionRepository.findByStore_Id(storeId).orElse(null);
-        if (connection != null && StringUtils.hasText(connection.getRefreshToken())) {
-            return refreshAndCacheStoreToken(connection);
-        }
-
-        return refreshLegacyGlobalToken();
+        return oauthStateStore.findAccessToken(storeId)
+                .orElseGet(() -> refreshAccessToken(storeId));
     }
 
     @Transactional(readOnly = true)
@@ -186,9 +182,18 @@ public class MockMapOwnerOAuthService {
                     connection.getClientSecret(),
                     Instant.now()
             );
-            cachedAccessTokens.remove(storeId);
+            oauthStateStore.deleteAccessToken(storeId);
         }
         return getConnectionStatus(storeId);
+    }
+
+    private String refreshAccessToken(UUID storeId) {
+        StoreMockMapConnectionEntity connection = connectionRepository.findByStore_Id(storeId).orElse(null);
+        if (connection != null && StringUtils.hasText(connection.getRefreshToken())) {
+            return refreshAndCacheStoreToken(connection);
+        }
+
+        return refreshLegacyGlobalToken();
     }
 
     private void persistStoreConnection(
@@ -352,7 +357,7 @@ public class MockMapOwnerOAuthService {
 
     private void requireCredentialValues(String clientId, String clientSecret) {
         if (!StringUtils.hasText(clientId) || !StringUtils.hasText(clientSecret)) {
-            throw new MockMapApiException("clientId와 clientSecret은 필수입니다.");
+            throw new IllegalArgumentException("clientId와 clientSecret은 필수입니다.");
         }
     }
 
@@ -367,26 +372,23 @@ public class MockMapOwnerOAuthService {
     private void cacheAccessToken(UUID storeId, MockMapOAuthTokenResponse tokenResponse) {
         int expiresIn = tokenResponse.expires_in() == null ? 900 : tokenResponse.expires_in();
         int safeTtlSeconds = Math.max(1, expiresIn - 30);
-        cachedAccessTokens.put(storeId, new CachedAccessToken(
+        oauthStateStore.saveAccessToken(
+                storeId,
                 tokenResponse.access_token(),
-                Instant.now().plusSeconds(safeTtlSeconds)
-        ));
+                Duration.ofSeconds(safeTtlSeconds)
+        );
     }
 
-    private PendingAuthorization validateState(String state) {
+    private MockMapOAuthPendingState validateState(String state) {
         if (!StringUtils.hasText(state)) {
             throw new MockMapApiException("MockMap OAuth callback state가 없습니다.");
         }
-        PendingAuthorization pending = pendingStates.remove(state);
-        if (pending == null || Instant.now().isAfter(pending.expiresAt())) {
-            throw new MockMapApiException("MockMap OAuth state가 유효하지 않거나 만료되었습니다.");
-        }
-        return pending;
+        return oauthStateStore.consumePendingState(state)
+                .orElseThrow(() -> new MockMapApiException("MockMap OAuth state가 유효하지 않거나 만료되었습니다."));
     }
 
-    private void cleanupExpiredStates() {
-        Instant now = Instant.now();
-        pendingStates.entrySet().removeIf(entry -> entry.getValue().expiresAt().isBefore(now));
+    private Duration pendingStateTtl() {
+        return Duration.ofSeconds(Math.max(60, cacheProperties.getPendingStateTtlSeconds()));
     }
 
     private String resolveAuthorizePath() {
@@ -403,11 +405,5 @@ public class MockMapOwnerOAuthService {
             }
         }
         return null;
-    }
-
-    private record PendingAuthorization(UUID storeId, UUID userId, Instant expiresAt) {
-    }
-
-    private record CachedAccessToken(String accessToken, Instant expiresAt) {
     }
 }

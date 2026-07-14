@@ -18,7 +18,15 @@ public record MockMapReviewCollectionResponse(
             String author_name,
             Integer rating,
             String content,
-            String created_at
+            String created_at,
+            List<ReplyItem> replies
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ReplyItem(
+            Integer id,
+            String content
     ) {
     }
 }

@@ -14,6 +14,7 @@ import org.hackathon12.shophub.global.error.NotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
@@ -171,10 +172,8 @@ public class StoreReviewService {
     }
 
     public AiGeneratedText suggestReviewReply(UUID reviewId) {
-        StoreReview review = storeReviewPort.findById(reviewId);
-        if (review == null) {
-            throw new NotFoundException("리뷰를 찾을 수 없습니다. reviewId=" + reviewId);
-        }
+        StoreReview review = requireReview(reviewId);
+        ensureReviewHasNoReply(review);
 
         StoreProfile storeProfile = storeProfileService.getStore(review.storeId());
         return aiTextGenerationService.suggestReviewReply(new ReviewReplyPrompt(
@@ -184,17 +183,15 @@ public class StoreReviewService {
         ));
     }
 
+    @Transactional
     public StoreReview reply(UUID reviewId, String replyContent) {
-        StoreReview review = storeReviewPort.findById(reviewId);
-        if (review == null) {
-            throw new NotFoundException("리뷰를 찾을 수 없습니다. reviewId=" + reviewId);
-        }
+        StoreReview review = requireReview(reviewId);
         if (!StringUtils.hasText(replyContent)) {
             throw new IllegalArgumentException("답글 내용은 필수입니다.");
         }
+        ensureReviewHasNoReply(review);
 
-        reviewReplyPublisherPort.publishReply(review, replyContent.trim());
-
+        String normalizedReply = replyContent.trim();
         StoreReview replied = new StoreReview(
                 review.id(),
                 review.storeId(),
@@ -204,10 +201,54 @@ public class StoreReviewService {
                 review.rating(),
                 review.content(),
                 review.reviewedAt(),
-                replyContent,
+                normalizedReply,
                 Instant.now()
         );
-        return storeReviewPort.save(replied);
+        StoreReview saved = storeReviewPort.save(replied);
+        reviewReplyPublisherPort.publishReply(saved, normalizedReply);
+        return saved;
+    }
+
+    @Transactional
+    public StoreReview deleteReply(UUID reviewId) {
+        StoreReview review = requireReview(reviewId);
+        ensureReviewHasReply(review);
+
+        StoreReview cleared = new StoreReview(
+                review.id(),
+                review.storeId(),
+                review.platform(),
+                review.sourceReviewId(),
+                review.authorName(),
+                review.rating(),
+                review.content(),
+                review.reviewedAt(),
+                null,
+                null
+        );
+        StoreReview saved = storeReviewPort.save(cleared);
+        reviewReplyPublisherPort.deleteReply(review);
+        return saved;
+    }
+
+    private StoreReview requireReview(UUID reviewId) {
+        StoreReview review = storeReviewPort.findById(reviewId);
+        if (review == null) {
+            throw new NotFoundException("리뷰를 찾을 수 없습니다. reviewId=" + reviewId);
+        }
+        return review;
+    }
+
+    private void ensureReviewHasNoReply(StoreReview review) {
+        if (StringUtils.hasText(review.reply())) {
+            throw new IllegalArgumentException("이미 답글이 등록된 리뷰입니다.");
+        }
+    }
+
+    private void ensureReviewHasReply(StoreReview review) {
+        if (!StringUtils.hasText(review.reply())) {
+            throw new IllegalArgumentException("등록된 답글이 없습니다.");
+        }
     }
 
     public StoreReview autoReplyWithAi(UUID reviewId) {

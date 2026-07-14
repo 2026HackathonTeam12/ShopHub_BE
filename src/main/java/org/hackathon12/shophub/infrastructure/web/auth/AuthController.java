@@ -3,6 +3,7 @@ package org.hackathon12.shophub.infrastructure.web.auth;
 import org.hackathon12.shophub.domain.auth.model.UserAccount;
 import org.hackathon12.shophub.domain.auth.service.AuthService;
 import org.hackathon12.shophub.domain.auth.service.AuthSessionService;
+import org.hackathon12.shophub.global.config.AuthSessionProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -19,10 +21,16 @@ public class AuthController {
 
     private final AuthService authService;
     private final AuthSessionService authSessionService;
+    private final AuthSessionProperties authSessionProperties;
 
-    public AuthController(AuthService authService, AuthSessionService authSessionService) {
+    public AuthController(
+            AuthService authService,
+            AuthSessionService authSessionService,
+            AuthSessionProperties authSessionProperties
+    ) {
         this.authService = authService;
         this.authSessionService = authSessionService;
+        this.authSessionProperties = authSessionProperties;
     }
 
     @PostMapping("/signup")
@@ -38,8 +46,17 @@ public class AuthController {
         return toResponse(account);
     }
 
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(HttpServletRequest request) {
+        String authorization = request.getHeader("Authorization");
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            authSessionService.revokeToken(authorization.substring("Bearer ".length()).trim());
+        }
+    }
+
     private AuthResponse toResponse(UserAccount account) {
-        Instant expiresAt = Instant.now().plusSeconds(60L * 60L * 24L);
+        Instant expiresAt = Instant.now().plus(authSessionProperties.ttl());
         return new AuthResponse(
                 authSessionService.issueToken(account.id()),
                 expiresAt,

@@ -1,6 +1,7 @@
 package org.hackathon12.shophub.domain.store.service;
 
 import org.hackathon12.shophub.domain.store.model.StoreProfile;
+import org.hackathon12.shophub.global.error.ForbiddenException;
 import org.hackathon12.shophub.global.error.NotFoundException;
 import org.hackathon12.shophub.infrastructure.persistence.StoreMembershipRole;
 import org.hackathon12.shophub.infrastructure.persistence.StoreProfileEntity;
@@ -62,8 +63,11 @@ public class StoreMembershipService {
 
     @Transactional(readOnly = true)
     public void requireMembership(UUID userId, UUID storeId) {
+        if (!storeProfileRepository.existsById(storeId)) {
+            throw new NotFoundException("가게를 찾을 수 없습니다. storeId=" + storeId);
+        }
         if (!membershipRepository.existsByUser_IdAndStore_Id(userId, storeId)) {
-            throw new NotFoundException("가게에 대한 접근 권한이 없습니다. storeId=" + storeId);
+            throw new ForbiddenException("가게에 대한 접근 권한이 없습니다. storeId=" + storeId);
         }
     }
 }

@@ -3,7 +3,7 @@ package org.hackathon12.shophub.infrastructure.web.integration;
 import org.hackathon12.shophub.infrastructure.mockmap.MockMapApiException;
 import org.hackathon12.shophub.infrastructure.mockmap.MockMapOAuthConnectionStatus;
 import org.hackathon12.shophub.infrastructure.mockmap.MockMapOwnerOAuthService;
-import org.hackathon12.shophub.infrastructure.web.auth.AuthContext;
+import org.hackathon12.shophub.infrastructure.web.auth.ShopHubAuthGuard;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -29,14 +29,14 @@ import java.util.UUID;
 public class MockMapOAuthController {
 
     private final MockMapOwnerOAuthService mockMapOwnerOAuthService;
-    private final AuthContext authContext;
+    private final ShopHubAuthGuard shopHubAuthGuard;
 
     public MockMapOAuthController(
             MockMapOwnerOAuthService mockMapOwnerOAuthService,
-            AuthContext authContext
+            ShopHubAuthGuard shopHubAuthGuard
     ) {
         this.mockMapOwnerOAuthService = mockMapOwnerOAuthService;
-        this.authContext = authContext;
+        this.shopHubAuthGuard = shopHubAuthGuard;
     }
 
     @PutMapping("/credentials")
@@ -45,7 +45,7 @@ public class MockMapOAuthController {
             @RequestBody SaveCredentialsRequest request,
             HttpServletRequest httpRequest
     ) {
-        UUID userId = requireUserId(httpRequest);
+        UUID userId = shopHubAuthGuard.requireStoreMember(httpRequest, storeId);
         return mockMapOwnerOAuthService.saveCredentials(
                 storeId,
                 userId,
@@ -59,7 +59,7 @@ public class MockMapOAuthController {
             @RequestParam UUID storeId,
             HttpServletRequest httpRequest
     ) {
-        UUID userId = requireUserId(httpRequest);
+        UUID userId = shopHubAuthGuard.requireStoreMember(httpRequest, storeId);
         return mockMapOwnerOAuthService.deleteCredentials(storeId, userId);
     }
 
@@ -69,7 +69,7 @@ public class MockMapOAuthController {
             HttpServletRequest request,
             HttpServletResponse response
     ) throws IOException {
-        UUID userId = requireUserId(request);
+        UUID userId = shopHubAuthGuard.requireStoreMember(request, storeId);
         response.sendRedirect(mockMapOwnerOAuthService.buildAuthorizationUrl(storeId, userId));
     }
 
@@ -102,7 +102,8 @@ public class MockMapOAuthController {
     }
 
     @GetMapping("/status")
-    public MockMapOAuthConnectionStatus status(@RequestParam UUID storeId) {
+    public MockMapOAuthConnectionStatus status(@RequestParam UUID storeId, HttpServletRequest request) {
+        shopHubAuthGuard.requireStoreMember(request, storeId);
         return mockMapOwnerOAuthService.getConnectionStatus(storeId);
     }
 
@@ -111,13 +112,8 @@ public class MockMapOAuthController {
             @RequestParam UUID storeId,
             HttpServletRequest httpRequest
     ) {
-        UUID userId = requireUserId(httpRequest);
+        UUID userId = shopHubAuthGuard.requireStoreMember(httpRequest, storeId);
         return mockMapOwnerOAuthService.disconnect(storeId, userId);
-    }
-
-    private UUID requireUserId(HttpServletRequest request) {
-        return authContext.resolveUserId(request)
-                .orElseThrow(() -> new MockMapApiException("MockMap OAuth 작업을 하려면 ShopHub 로그인이 필요합니다."));
     }
 
     private ResponseEntity<String> htmlResponse(HttpStatus status, String title, String message) {

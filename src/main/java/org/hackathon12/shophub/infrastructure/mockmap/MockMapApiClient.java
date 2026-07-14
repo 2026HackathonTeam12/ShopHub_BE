@@ -118,6 +118,20 @@ public class MockMapApiClient {
         }
     }
 
+    public void deleteReply(String reviewId, String replyId, String accessToken) {
+        try {
+            restClient.delete()
+                    .uri(resolveReplyDetailPath(reviewId, replyId))
+                    .header("Authorization", "Bearer " + accessToken)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientResponseException exception) {
+            throw toApiException("답글 삭제", exception);
+        } catch (Exception exception) {
+            throw new MockMapApiException("ShopHub_MockMap API 답글 삭제에 실패했습니다.", exception);
+        }
+    }
+
     public MockMapReviewSingleResponse createReply(String reviewId, String accessToken, String content) {
         try {
             String jsonBody = objectMapper.writeValueAsString(Map.of("content", content));
@@ -186,5 +200,9 @@ public class MockMapApiClient {
         String reviewsPath = resolveReviewsPath();
         String normalizedReviewsPath = reviewsPath.endsWith("/") ? reviewsPath : reviewsPath + "/";
         return normalizedReviewsPath + reviewId + "/reply/";
+    }
+
+    private String resolveReplyDetailPath(String reviewId, String replyId) {
+        return resolveReplyPath(reviewId) + replyId + "/";
     }
 }
