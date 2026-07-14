@@ -718,7 +718,7 @@ class ShopHubApiIntegrationTest {
     }
 
     @Test
-    void ai_suggest_mode_returns_title_and_body_without_creating_content() throws Exception {
+    void suggest_content_returns_title_and_body_without_creating_content() throws Exception {
         int beforeCount = objectMapper.readTree(
                         mockMvc.perform(authed(get("/v1/stores/{storeId}/contents", STORE_ID)))
                                 .andExpect(status().isOk())
@@ -729,11 +729,10 @@ class ShopHubApiIntegrationTest {
                 .size();
 
         String suggestRequest = objectMapper.writeValueAsString(Map.of(
-                "aiSuggest", true,
                 "eventText", "장마 기간 따뜻한 라떼 할인 이벤트"
         ));
 
-        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents", STORE_ID)
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/suggest", STORE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(suggestRequest)))
                 .andExpect(status().isOk())
@@ -750,6 +749,7 @@ class ShopHubApiIntegrationTest {
                                 .getContentAsString()
                 )
                 .size();
+
         Assertions.assertEquals(beforeCount, afterCount);
     }
 
@@ -1359,6 +1359,7 @@ class ShopHubApiIntegrationTest {
                 "POST /v1/reviews/{reviewId}/reply",
                 "POST /v1/stores",
                 "POST /v1/stores/{storeId}/contents",
+                "POST /v1/stores/{storeId}/contents/suggest",
                 "POST /v1/stores/{storeId}/contents/{contentId}/retry",
                 "POST /v1/stores/{storeId}/contents/{type}/publish-carousel",
                 "POST /v1/stores/{storeId}/profile/menus",

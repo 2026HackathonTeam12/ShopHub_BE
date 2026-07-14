@@ -44,17 +44,12 @@ public class ContentController {
     }
 
     @PostMapping
-    public ResponseEntity<Object> createContent(
+    public ResponseEntity<ContentItem> createContent(
             @PathVariable UUID storeId,
             @RequestBody CreateContentRequest requestBody,
             HttpServletRequest request
     ) {
         shopHubAuthGuard.requireStoreMember(request, storeId);
-
-        if (Boolean.TRUE.equals(requestBody.aiSuggest())) {
-            ContentSuggestion suggestion = contentService.suggestContent(storeId, requestBody.eventText());
-            return ResponseEntity.ok(suggestion);
-        }
 
         if (!StringUtils.hasText(requestBody.title()) || !StringUtils.hasText(requestBody.body())) {
             throw new IllegalArgumentException("콘텐츠 생성에는 title/body가 필요합니다.");
@@ -64,6 +59,16 @@ public class ContentController {
                 : requestBody.channels();
         ContentItem created = contentService.createContent(storeId, requestBody.title(), requestBody.body(), channels);
         return ResponseEntity.status(201).body(created);
+    }
+
+    @PostMapping("/suggest")
+    public ContentSuggestion suggestContent(
+            @PathVariable UUID storeId,
+            @RequestBody SuggestContentRequest requestBody,
+            HttpServletRequest request
+    ) {
+        shopHubAuthGuard.requireStoreMember(request, storeId);
+        return contentService.suggestContent(storeId, requestBody.eventText());
     }
 
     @PostMapping("/{contentId}/retry")
@@ -90,8 +95,11 @@ public class ContentController {
     public record CreateContentRequest(
             String title,
             String body,
-            List<String> channels,
-            Boolean aiSuggest,
+            List<String> channels
+    ) {
+    }
+
+    public record SuggestContentRequest(
             String eventText
     ) {
     }
