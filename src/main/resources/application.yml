@@ -47,6 +47,13 @@ openai:
   model: ${OPENAI_MODEL:gpt-4o-mini}
   temperature: ${OPENAI_TEMPERATURE:0.7}
 
+anthropic:
+  api-key: ${ANTHROPIC_API_KEY:}
+  base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+  model: ${ANTHROPIC_MODEL:claude-sonnet-4-6}
+  max-tokens: ${ANTHROPIC_MAX_TOKENS:1024}
+  api-version: ${ANTHROPIC_API_VERSION:2023-06-01}
+
 instagram:
   graph:
     base-url: ${INSTAGRAM_GRAPH_BASE_URL:https://graph.instagram.com/v21.0}
@@ -56,6 +63,32 @@ instagram:
     allowed-username: ${INSTAGRAM_GRAPH_ALLOWED_USERNAME:commentcopybot}
     max-attempts: ${INSTAGRAM_GRAPH_MAX_ATTEMPTS:15}
     interval-ms: ${INSTAGRAM_GRAPH_INTERVAL_MS:2000}
+
+x:
+  api:
+    tweets-url: ${X_TWEETS_URL:https://api.x.com/2/tweets}
+    media-upload-url: ${X_MEDIA_UPLOAD_URL:https://api.x.com/2/media/upload}
+  oauth:
+    authorize-url: ${X_OAUTH_AUTHORIZE_URL:https://twitter.com/i/oauth2/authorize}
+    token-url: ${X_OAUTH_TOKEN_URL:https://api.x.com/2/oauth2/token}
+    revoke-url: ${X_OAUTH_REVOKE_URL:https://api.x.com/2/oauth2/revoke}
+    client-id: ${X_OAUTH_CLIENT_ID:}
+    client-secret: ${X_OAUTH_CLIENT_SECRET:}
+    redirect-uri: ${X_OAUTH_REDIRECT_URI:http://localhost:8080/api/integrations/X/oauth/callback}
+    scope: ${X_OAUTH_SCOPE:tweet.read tweet.write users.read offline.access media.write}
+    cache:
+      store: ${X_OAUTH_CACHE_STORE:redis}
+      pending-state-ttl-seconds: ${X_OAUTH_PENDING_STATE_TTL_SECONDS:600}
+      pending-state-key-prefix: ${X_OAUTH_PENDING_STATE_KEY_PREFIX:shophub:x:oauth:pending-state:}
+      access-token-key-prefix: ${X_OAUTH_ACCESS_TOKEN_KEY_PREFIX:shophub:x:oauth:access-token:}
+
+facebook:
+  graph:
+    base-url: ${FACEBOOK_GRAPH_BASE_URL:https://graph.facebook.com/v21.0}
+    page-id: ${FACEBOOK_GRAPH_PAGE_ID:}
+    access-token: ${FACEBOOK_GRAPH_ACCESS_TOKEN:}
+    allowed-page-id: ${FACEBOOK_GRAPH_ALLOWED_PAGE_ID:}
+    allowed-page-name: ${FACEBOOK_GRAPH_ALLOWED_PAGE_NAME:}
 
 app:
   auth:

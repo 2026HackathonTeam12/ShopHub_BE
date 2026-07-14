@@ -6,7 +6,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Arrays;
 
 public enum OAuthIntegrationType {
-    MOCK_MAP("MOCK_MAP");
+    MOCK_MAP("MOCK_MAP"),
+    X("X");
 
     private final String pathValue;
 

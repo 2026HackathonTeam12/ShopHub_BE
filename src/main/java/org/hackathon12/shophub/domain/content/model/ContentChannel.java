@@ -5,7 +5,8 @@ import java.util.List;
 public enum ContentChannel {
     INSTAGRAM,
     NAVER_BLOG,
-    FACEBOOK;
+    FACEBOOK,
+    X;
 
     public static ContentChannel fromValue(String value) {
         if (value == null || value.isBlank()) {
@@ -18,7 +19,7 @@ public enum ContentChannel {
         } catch (IllegalArgumentException exception) {
             throw new IllegalArgumentException(
                     "지원하지 않는 콘텐츠 채널입니다: " + value
-                            + " (허용: INSTAGRAM, NAVER_BLOG, FACEBOOK)"
+                            + " (허용: INSTAGRAM, NAVER_BLOG, FACEBOOK, X)"
             );
         }
     }

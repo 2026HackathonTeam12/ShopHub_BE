@@ -5,6 +5,7 @@ import org.hackathon12.shophub.domain.integration.model.OAuthIntegrationType;
 import org.hackathon12.shophub.domain.integration.port.OAuthIntegrationProvider;
 import org.hackathon12.shophub.domain.integration.service.OAuthIntegrationService;
 import org.hackathon12.shophub.infrastructure.mockmap.MockMapApiException;
+import org.hackathon12.shophub.infrastructure.x.XApiException;
 import org.hackathon12.shophub.infrastructure.web.auth.ShopHubAuthGuard;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -114,6 +115,12 @@ public class OAuthIntegrationController {
                             + "ShopHub BE가 이제 이 가게의 " + integrationType.pathValue() + " 답글 API를 사용할 수 있습니다."
             );
         } catch (MockMapApiException exception) {
+            return htmlResponse(
+                    HttpStatus.BAD_REQUEST,
+                    integrationType.pathValue() + " OAuth 연결 실패",
+                    exception.getMessage()
+            );
+        } catch (XApiException exception) {
             return htmlResponse(
                     HttpStatus.BAD_REQUEST,
                     integrationType.pathValue() + " OAuth 연결 실패",

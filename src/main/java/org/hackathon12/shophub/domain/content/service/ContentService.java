@@ -4,6 +4,7 @@ import org.hackathon12.shophub.domain.ai.model.ContentSuggestionPrompt;
 import org.hackathon12.shophub.domain.ai.service.AiTextGenerationService;
 import org.hackathon12.shophub.domain.content.model.ContentChannel;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
+import org.hackathon12.shophub.domain.content.model.ContentPlatformStatusItem;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
 import org.hackathon12.shophub.domain.content.port.ContentPort;
@@ -56,6 +57,11 @@ public class ContentService {
                 .toList();
     }
 
+    public List<ContentPlatformStatusItem> getContentPlatformStatuses(UUID storeId) {
+        storeProfileService.getStore(storeId);
+        return contentPort.findPlatformStatusesByStoreId(storeId);
+    }
+
     public ContentItem createContent(UUID storeId, String title, String body, List<String> channels) {
         storeProfileService.getStore(storeId);
         List<String> normalizedChannels = ContentChannel.normalizeAll(channels);
@@ -97,6 +103,8 @@ public class ContentService {
             );
         }
         validateStatusTransition(current.status(), ContentStatus.DRAFT);
+
+        contentPort.resetPlatformStatusesToPending(contentId);
 
         ContentItem retried = new ContentItem(
                 current.id(),

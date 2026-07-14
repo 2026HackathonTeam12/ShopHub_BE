@@ -1,6 +1,9 @@
 package org.hackathon12.shophub.infrastructure.persistence;
 
+import org.hackathon12.shophub.domain.content.model.ContentChannelPublishStatus;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
+import org.hackathon12.shophub.domain.content.model.ContentPlatformState;
+import org.hackathon12.shophub.domain.content.model.ContentPlatformStatusItem;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -19,7 +22,9 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "content_items")
@@ -52,8 +57,7 @@ public class ContentItemEntity {
             )
     )
     @OrderColumn(name = "display_order")
-    @Column(name = "channel_name", nullable = false)
-    private List<String> channels = new ArrayList<>();
+    private List<ContentChannelEmbeddable> channels = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -66,14 +70,16 @@ public class ContentItemEntity {
     }
 
     public static ContentItemEntity fromDomain(ContentItem contentItem) {
+        return fromDomain(contentItem, null);
+    }
+
+    public static ContentItemEntity fromDomain(ContentItem contentItem, List<ContentPlatformState> platformStates) {
         ContentItemEntity entity = new ContentItemEntity();
         entity.id = contentItem.id();
         entity.store = StoreProfileEntity.reference(contentItem.storeId());
         entity.title = contentItem.title();
         entity.body = contentItem.body();
-        entity.channels = contentItem.channels() == null
-                ? new ArrayList<>()
-                : new ArrayList<>(contentItem.channels());
+        entity.channels = toEmbeddables(contentItem.channels(), platformStates);
         entity.status = contentItem.status();
         entity.updatedAt = contentItem.updatedAt();
         return entity;
@@ -85,9 +91,68 @@ public class ContentItemEntity {
                 store.getId(),
                 title,
                 body,
-                List.copyOf(channels),
+                channels.stream()
+                        .map(ContentChannelEmbeddable::getChannelName)
+                        .toList(),
                 status,
                 updatedAt
         );
+    }
+
+    public ContentPlatformStatusItem toPlatformStatusDomain() {
+        return new ContentPlatformStatusItem(
+                id,
+                store.getId(),
+                title,
+                body,
+                channels.stream()
+                        .map(ContentChannelEmbeddable::toDomain)
+                        .toList(),
+                updatedAt
+        );
+    }
+
+    public void mergePlatformStatuses(ContentItemEntity existing) {
+        Map<String, ContentChannelPublishStatus> existingStatuses = existing.channels.stream()
+                .collect(Collectors.toMap(
+                        ContentChannelEmbeddable::getChannelName,
+                        ContentChannelEmbeddable::getPublishStatus,
+                        (left, right) -> left
+                ));
+
+        for (ContentChannelEmbeddable channel : channels) {
+            ContentChannelPublishStatus preservedStatus = existingStatuses.get(channel.getChannelName());
+            if (preservedStatus != null) {
+                channel.setPublishStatus(preservedStatus);
+            }
+        }
+    }
+
+    public void resetAllPlatformStatusesToPending() {
+        for (ContentChannelEmbeddable channel : channels) {
+            channel.setPublishStatus(ContentChannelPublishStatus.PENDING);
+        }
+    }
+
+    private static List<ContentChannelEmbeddable> toEmbeddables(
+            List<String> channels,
+            List<ContentPlatformState> platformStates
+    ) {
+        Map<String, ContentChannelPublishStatus> statusByChannel = platformStates == null
+                ? Map.of()
+                : platformStates.stream()
+                        .collect(Collectors.toMap(
+                                state -> state.platform().name(),
+                                ContentPlatformState::status,
+                                (left, right) -> left
+                        ));
+
+        List<String> normalizedChannels = channels == null ? List.of() : channels;
+        return normalizedChannels.stream()
+                .map(channelName -> new ContentChannelEmbeddable(
+                        channelName,
+                        statusByChannel.getOrDefault(channelName, ContentChannelPublishStatus.PENDING)
+                ))
+                .toList();
     }
 }

@@ -1,8 +1,10 @@
 package org.hackathon12.shophub.infrastructure.web.content;
 
 import org.hackathon12.shophub.domain.content.model.ContentChannel;
+import org.hackathon12.shophub.domain.facebook.service.FacebookPublishService;
 import org.hackathon12.shophub.domain.instagram.model.InstagramPublishResult;
 import org.hackathon12.shophub.domain.instagram.service.InstagramPublishService;
+import org.hackathon12.shophub.domain.x.service.XPublishService;
 import org.hackathon12.shophub.infrastructure.web.auth.ShopHubAuthGuard;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,13 +23,19 @@ import java.util.UUID;
 public class ContentPublishController {
 
     private final InstagramPublishService instagramPublishService;
+    private final XPublishService xPublishService;
+    private final FacebookPublishService facebookPublishService;
     private final ShopHubAuthGuard shopHubAuthGuard;
 
     public ContentPublishController(
             InstagramPublishService instagramPublishService,
+            XPublishService xPublishService,
+            FacebookPublishService facebookPublishService,
             ShopHubAuthGuard shopHubAuthGuard
     ) {
         this.instagramPublishService = instagramPublishService;
+        this.xPublishService = xPublishService;
+        this.facebookPublishService = facebookPublishService;
         this.shopHubAuthGuard = shopHubAuthGuard;
     }
 
@@ -40,25 +48,36 @@ public class ContentPublishController {
     ) {
         shopHubAuthGuard.requireStoreMember(request, storeId);
         ContentChannel channel = ContentChannel.fromValue(type);
-        List<String> imageUrls = normalizeImageUrls(requestBody.imageUrls());
+        List<String> imageUrls = normalizeImageUrls(requestBody.imageUrls(), channel);
 
         return switch (channel) {
             case INSTAGRAM -> {
                 instagramPublishService.ensurePublishReady();
                 yield instagramPublishService.generateAndPublish(storeId, imageUrls);
             }
-            case NAVER_BLOG, FACEBOOK -> throw new IllegalArgumentException(
+            case X -> {
+                xPublishService.ensurePublishReady(storeId);
+                yield xPublishService.generateAndPublish(storeId, imageUrls);
+            }
+            case FACEBOOK -> {
+                facebookPublishService.ensurePublishReady();
+                yield facebookPublishService.generateAndPublish(storeId, imageUrls);
+            }
+            case NAVER_BLOG -> throw new IllegalArgumentException(
                     "아직 지원하지 않는 콘텐츠 채널입니다: " + channel.name()
             );
         };
     }
 
-    private List<String> normalizeImageUrls(List<String> imageUrls) {
+    private List<String> normalizeImageUrls(List<String> imageUrls, ContentChannel channel) {
         if (imageUrls == null || imageUrls.isEmpty()) {
             throw new IllegalArgumentException("imageUrls는 최소 1개 이상 필요합니다.");
         }
-        if (imageUrls.size() > 10) {
-            throw new IllegalArgumentException("imageUrls는 최대 10개까지 지원합니다.");
+        int maxImages = channel == ContentChannel.X ? 4 : 10;
+        if (imageUrls.size() > maxImages) {
+            throw new IllegalArgumentException(
+                    channel.name() + " 게시 이미지는 최대 " + maxImages + "장까지 지원합니다."
+            );
         }
 
         return imageUrls.stream()

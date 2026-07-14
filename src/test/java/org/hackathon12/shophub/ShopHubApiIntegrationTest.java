@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -40,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "instagram.graph.account-id=",
         "instagram.graph.access-token=",
         "instagram.graph.allowed-account-id=",
+        "facebook.graph.access-token=",
         "openai.api-key="
 })
 @AutoConfigureMockMvc
@@ -684,6 +686,11 @@ class ShopHubApiIntegrationTest {
                         .content(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void facebook_publish_returns_400_when_credentials_missing() throws Exception {
+        String request = publishCarouselRequest("https://picsum.photos/id/1015/1080/1080");
 
         mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/FACEBOOK/publish-carousel", STORE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -697,6 +704,17 @@ class ShopHubApiIntegrationTest {
         String request = publishCarouselRequest("https://picsum.photos/id/1015/1080/1080");
 
         mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/MOCK_MAP/publish-carousel", STORE_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void x_publish_returns_400_when_oauth_not_connected() throws Exception {
+        String request = publishCarouselRequest("https://picsum.photos/id/1015/1080/1080");
+
+        mockMvc.perform(authed(post("/v1/stores/{storeId}/contents/X/publish-carousel", STORE_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request)))
                 .andExpect(status().isBadRequest())
@@ -1007,7 +1025,7 @@ class ShopHubApiIntegrationTest {
         mockMvc.perform(authed(get("/api/integrations/oauth/status").param("storeId", STORE_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$[?(@.type=='MOCK_MAP')]").isEmpty());
     }
 
     @Test
@@ -1165,6 +1183,41 @@ class ShopHubApiIntegrationTest {
                         .content(patchRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SCHEDULED"));
+    }
+
+    @Test
+    void content_platform_statuses_can_be_listed() throws Exception {
+        String response = mockMvc.perform(authed(get("/v1/stores/{storeId}/contents/platform-status", STORE_ID)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        ArrayNode items = (ArrayNode) objectMapper.readTree(response);
+        Assertions.assertFalse(items.isEmpty());
+
+        for (int i = 0; i < items.size(); i++) {
+            JsonNode item = items.get(i);
+            Assertions.assertTrue(item.has("platforms"));
+            ArrayNode platforms = (ArrayNode) item.get("platforms");
+            Assertions.assertFalse(platforms.isEmpty());
+            for (int j = 0; j < platforms.size(); j++) {
+                JsonNode platform = platforms.get(j);
+                Assertions.assertTrue(platform.has("platform"));
+                Assertions.assertTrue(platform.has("status"));
+                String status = platform.get("status").asText();
+                Assertions.assertTrue(List.of("PENDING", "SUCCESS", "FAILED").contains(status));
+            }
+        }
+
+        mockMvc.perform(authed(get("/v1/stores/{storeId}/contents/platform-status", STORE_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id=='3034b816-757d-487f-b4c7-d1f7bea4f78f')].platforms[0].platform")
+                        .value("INSTAGRAM"))
+                .andExpect(jsonPath("$[?(@.id=='3034b816-757d-487f-b4c7-d1f7bea4f78f')].platforms[0].status")
+                        .value("SUCCESS"))
+                .andExpect(jsonPath("$[?(@.id=='c781ac92-ef95-4cdb-ad87-0379a826f576')].platforms[0].status")
+                        .value("FAILED"));
     }
 
     @Test

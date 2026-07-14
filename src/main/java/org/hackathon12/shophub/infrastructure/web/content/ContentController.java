@@ -2,6 +2,7 @@ package org.hackathon12.shophub.infrastructure.web.content;
 
 import org.hackathon12.shophub.domain.content.model.ContentChannel;
 import org.hackathon12.shophub.domain.content.model.ContentItem;
+import org.hackathon12.shophub.domain.content.model.ContentPlatformStatusItem;
 import org.hackathon12.shophub.domain.content.model.ContentSuggestion;
 import org.hackathon12.shophub.domain.content.model.ContentStatus;
 import org.hackathon12.shophub.domain.content.service.ContentService;
@@ -41,6 +42,15 @@ public class ContentController {
     ) {
         shopHubAuthGuard.requireStoreMember(request, storeId);
         return contentService.getContents(storeId, status);
+    }
+
+    @GetMapping("/platform-status")
+    public List<ContentPlatformStatusItem> getContentPlatformStatuses(
+            @PathVariable UUID storeId,
+            HttpServletRequest request
+    ) {
+        shopHubAuthGuard.requireStoreMember(request, storeId);
+        return contentService.getContentPlatformStatuses(storeId);
     }
 
     @PostMapping

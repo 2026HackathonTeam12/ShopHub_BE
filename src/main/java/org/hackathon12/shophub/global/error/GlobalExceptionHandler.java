@@ -1,8 +1,10 @@
 package org.hackathon12.shophub.global.error;
 
 import org.hackathon12.shophub.infrastructure.ai.openai.OpenAiApiException;
+import org.hackathon12.shophub.infrastructure.facebook.FacebookGraphApiException;
 import org.hackathon12.shophub.infrastructure.instagram.InstagramGraphApiException;
 import org.hackathon12.shophub.infrastructure.mockmap.MockMapApiException;
+import org.hackathon12.shophub.infrastructure.x.XApiException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -28,6 +30,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InstagramGraphApiException.class)
     public ApiErrorResponse handleInstagramGraphApiException(InstagramGraphApiException exception) {
         return new ApiErrorResponse("INSTAGRAM_GRAPH_API_ERROR", exception.getMessage(), Instant.now());
+    }
+
+    @ResponseStatus(HttpStatus.BAD_GATEWAY)
+    @ExceptionHandler(FacebookGraphApiException.class)
+    public ApiErrorResponse handleFacebookGraphApiException(FacebookGraphApiException exception) {
+        return new ApiErrorResponse("FACEBOOK_GRAPH_API_ERROR", exception.getMessage(), Instant.now());
+    }
+
+    @ResponseStatus(HttpStatus.BAD_GATEWAY)
+    @ExceptionHandler(XApiException.class)
+    public ApiErrorResponse handleXApiException(XApiException exception) {
+        return new ApiErrorResponse("X_API_ERROR", exception.getMessage(), Instant.now());
     }
 
     @ResponseStatus(HttpStatus.BAD_GATEWAY)

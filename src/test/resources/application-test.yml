@@ -26,3 +26,8 @@ mock-map:
   oauth:
     cache:
       store: memory
+
+x:
+  oauth:
+    cache:
+      store: memory

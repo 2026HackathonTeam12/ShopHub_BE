@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: ShopHub API
-  version: 0.2.9
+  version: 0.3.0
   description: |
     현재 코드 기준 API 명세서.
     패키지 구조(domain/global/infrastructure)에 맞춰 구현된 REST API를 기술한다.
@@ -17,6 +17,7 @@ info:
     | type | 설명 |
     |------|------|
     | `MOCK_MAP` | MockMap 리뷰 조회/답글 발행 OAuth |
+    | `X` | X OAuth 2.0 PKCE · 가게별 계정 연결 |
 
     예시 경로: `/api/integrations/MOCK_MAP/oauth/start?storeId={storeId}`
 
@@ -25,8 +26,9 @@ info:
     | type | 설명 |
     |------|------|
     | `INSTAGRAM` | Instagram Graph API 게시 (구현됨) |
+    | `X` | X API 게시 (구현됨, OAuth 2.0 PKCE · 가게별 계정 연결) |
     | `NAVER_BLOG` | 네이버 블로그 게시 (미구현) |
-    | `FACEBOOK` | Facebook 게시 (미구현) |
+    | `FACEBOOK` | Facebook Graph API 게시 (구현됨) |
 
     예시 경로: `POST /v1/stores/{storeId}/contents/INSTAGRAM/publish-carousel`
     요청 본문에 Instagram 등이 접근 가능한 **공개 이미지 URL**(`imageUrls`)을 전달합니다.
@@ -35,6 +37,7 @@ info:
     | API | 설명 |
     |-----|------|
     | `POST /v1/stores/{storeId}/contents` | title/body로 콘텐츠 생성 (`201`) |
+    | `GET /v1/stores/{storeId}/contents/platform-status` | 콘텐츠별 플랫폼 게시 상태 전체 조회 |
     | `POST /v1/stores/{storeId}/contents/suggest` | AI title/body 초안 추천 (`200`, DB 저장 없음) |
     | `POST /v1/stores/{storeId}/contents/{type}/publish-carousel` | 공개 이미지 URL로 SNS 게시 |
 servers:
@@ -318,6 +321,53 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /v1/stores/{storeId}/contents/platform-status:
+    get:
+      tags: [Content]
+      summary: 콘텐츠 플랫폼 게시 상태 전체 조회
+      description: |
+        매장의 모든 콘텐츠를 조회하고, 각 콘텐츠별 대상 플랫폼(`ContentChannel`)과
+        플랫폼별 게시 상태(`PENDING`, `SUCCESS`, `FAILED`)를 함께 반환합니다.
+        페이징은 지원하지 않습니다.
+      operationId: getContentPlatformStatuses
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationHeader'
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200':
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ContentPlatformStatusItem'
+              example:
+                - id: 3034b816-757d-487f-b4c7-d1f7bea4f78f
+                  storeId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                  title: 비 오는 날, 따뜻한 라떼
+                  body: 비 오는 오늘, 따뜻한 라떼 한 잔으로 잠깐 쉬어가세요.
+                  platforms:
+                    - platform: INSTAGRAM
+                      status: SUCCESS
+                  updatedAt: '2026-07-14T02:47:59.002Z'
+                - id: c68f0630-c40e-41cc-9335-39b82773f931
+                  storeId: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+                  title: 연남동 산책 후 들르는 커피
+                  body: 산책 후엔 버터 취향시에와 모모 라떼가 좋아요.
+                  platforms:
+                    - platform: INSTAGRAM
+                      status: PENDING
+                    - platform: FACEBOOK
+                      status: PENDING
+                  updatedAt: '2026-07-14T01:47:59.002Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /v1/stores/{storeId}/contents/suggest:
     post:
       tags: [Content]
@@ -419,14 +469,17 @@ paths:
       summary: SNS 콘텐츠 이미지 게시 (1장 이상)
       description: |
         `type`은 콘텐츠 게시 채널(`ContentChannel`) **대문자 enum**입니다.
-        사용 가능한 값: `INSTAGRAM`, `NAVER_BLOG`, `FACEBOOK`
+        사용 가능한 값: `INSTAGRAM`, `X`, `NAVER_BLOG`, `FACEBOOK`
 
-        요청 본문의 `imageUrls`에 **공개 접근 가능한 이미지 URL**을 1~10개 전달합니다.
+        요청 본문의 `imageUrls`에 **공개 접근 가능한 이미지 URL**을 전달합니다.
+        - Instagram: 1~10장
+        - X: 1~4장
         가게/콘텐츠/운영시간 정보를 바탕으로 AI 캡션을 생성한 뒤 해당 채널 API로 게시합니다.
         - 1장이면 단일 이미지 게시
-        - 2장 이상이면 캐러셀 게시 (Instagram)
-        - Instagram Graph API는 URL에서 이미지를 직접 가져오므로, localhost 전용 URL은 사용할 수 없습니다.
-        - 현재 `INSTAGRAM`만 구현되어 있으며, `NAVER_BLOG`/`FACEBOOK`은 추후 지원 예정입니다.
+        - 2장 이상이면 캐러셀/멀티 이미지 게시
+        - Instagram Graph API / X API는 URL에서 이미지를 직접 가져오므로, localhost 전용 URL은 사용할 수 없습니다.
+        - 현재 `INSTAGRAM`, `X`, `FACEBOOK`이 구현되어 있으며, `NAVER_BLOG`는 추후 지원 예정입니다.
+        - `X`는 앱 OAuth 2.0 자격증명(`.env`) 설정 후 `/api/integrations/X/oauth/start`로 가게별 X 계정을 연결합니다.
       operationId: publishContentCarousel
       parameters:
         - $ref: '#/components/parameters/AuthorizationHeader'
@@ -999,7 +1052,7 @@ components:
       required: true
       description: |
         콘텐츠 게시 채널 (`ContentChannel` enum, **대문자**).
-        사용 가능한 값: `INSTAGRAM`, `NAVER_BLOG`, `FACEBOOK`
+        사용 가능한 값: `INSTAGRAM`, `X`, `NAVER_BLOG`, `FACEBOOK`
       schema:
         $ref: '#/components/schemas/ContentChannel'
       example: INSTAGRAM
@@ -1073,10 +1126,13 @@ components:
         경로 파라미터 `{type}` 및 응답 필드 `type`에 **대문자 enum 값**으로 사용됩니다.
       enum:
         - MOCK_MAP
+        - X
       x-enum-varnames:
         - MOCK_MAP
+        - X
       x-enum-descriptions:
         - MockMap 리뷰 조회/답글 발행 OAuth 연동
+        - X OAuth 2.0 PKCE · 가게별 계정 연결
       example: MOCK_MAP
 
     ContentChannel:
@@ -1087,14 +1143,17 @@ components:
         SNS 게시 채널만 허용합니다.
       enum:
         - INSTAGRAM
+        - X
         - NAVER_BLOG
         - FACEBOOK
       x-enum-varnames:
         - INSTAGRAM
+        - X
         - NAVER_BLOG
         - FACEBOOK
       x-enum-descriptions:
         - Instagram 콘텐츠/게시 연동
+        - X 게시 연동
         - 네이버 블로그 게시
         - Facebook 게시
       example: INSTAGRAM
@@ -1306,6 +1365,45 @@ components:
       type: string
       enum: [DRAFT, SCHEDULED, PUBLISHED, FAILED]
 
+    ContentChannelPublishStatus:
+      type: string
+      enum: [PENDING, SUCCESS, FAILED]
+      x-enum-descriptions:
+        PENDING: 게시 대기
+        SUCCESS: 게시 성공
+        FAILED: 게시 실패
+
+    ContentPlatformState:
+      type: object
+      required: [platform, status]
+      properties:
+        platform:
+          $ref: '#/components/schemas/ContentChannel'
+        status:
+          $ref: '#/components/schemas/ContentChannelPublishStatus'
+
+    ContentPlatformStatusItem:
+      type: object
+      required: [id, storeId, title, body, platforms, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        platforms:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentPlatformState'
+        updatedAt:
+          type: string
+          format: date-time
+
     ContentItem:
       type: object
       required: [id, storeId, title, body, channels, status, updatedAt]
@@ -1466,7 +1564,7 @@ components:
           description: toneOfVoice의 프론트 호환 필드
         hours:
           type: string
-          description: businessHours가 없을 때 파싱하는 요약 문자열 (예: 매일 10:00 - 20:00)
+          description: "businessHours가 없을 때 파싱하는 요약 문자열 (예: 매일 10:00 - 20:00)"
         businessHours:
           type: array
           items:
