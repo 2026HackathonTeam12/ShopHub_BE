@@ -646,36 +646,6 @@ paths:
                 items:
                   $ref: '#/components/schemas/StoreReview'
 
-  /v1/stores/{storeId}/reviews/sync-mockmap:
-    post:
-      tags: [Reviews]
-      summary: MockMap 리뷰 동기화
-      description: |
-        MockMap `GET /api/reviews/?place_id=` API에서 리뷰를 가져와 upsert합니다.
-        cron(`app.review-sync`)으로도 주기적으로 동기화됩니다.
-      operationId: syncMockMapReviews
-      parameters:
-        - $ref: '#/components/parameters/AuthorizationHeader'
-        - $ref: '#/components/parameters/StoreId'
-      responses:
-        '202':
-          description: 동기화 완료
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/StoreReview'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '502':
-          $ref: '#/components/responses/BadGateway'
 
   /v1/reviews/{reviewId}/ai-draft:
     post:
